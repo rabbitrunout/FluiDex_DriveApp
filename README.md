@@ -69,7 +69,8 @@ Missing these tasks often leads to costly repairs and unnecessary stress.
 
 ### Prerequisites  
 - macOS (latest version)  
-- [Mockup]([https://developer.apple.com/xcode/](https://xd.adobe.com/view/7dc72984-cdac-4c01-83ea-2575e9d4d903-2894/)) 15+  
+- [Mockup](https://xd.adobe.com/view/7dc72984-cdac-4c01-83ea-2575e9d4d903-2894/)
+ 15+  
 - Swift 5.9+  
 - Git (configured with your GitHub account)  
 
