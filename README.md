@@ -73,7 +73,4 @@ Missing these tasks often leads to costly repairs and unnecessary stress.
 - Swift 5.9+  
 - Git (configured with your GitHub account)  
 
-### Steps  
-1. Clone the repository:  
-   ```bash
-   git clone https://github.com/rabbitrunout/FluiDex_DriveApp.git
+
