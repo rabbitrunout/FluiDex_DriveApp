@@ -42,3 +42,43 @@ class ServiceViewModel: ObservableObject {
         return progress
     }
 }
+
+extension ServiceViewModel {
+    struct DueInfo {
+        let type: String      // "Oil" / "Coolant" / "Brake"
+        let progress: Double  // 0.0 ... 1.0
+        let etaKm: Int        // примерная оставшаяся дистанция
+        let intervalKm: Int
+    }
+    
+    /// Возвращает самый критичный сервис (минимальный progress) среди заданных типов
+    func mostCriticalDue(currentMileage: Int, types: [String] = ["Oil","Coolant","Brake"]) -> DueInfo? {
+        var best: DueInfo?
+        
+        for t in types {
+            let interval: Int
+            switch t {
+            case "Oil":     interval = 10_000
+            case "Coolant": interval = 30_000
+            case "Brake":   interval = 40_000
+            default:        interval = 10_000
+            }
+            
+            // Находим последнюю запись по типу
+            let last = services.last { $0.type.localizedCaseInsensitiveContains(t) }
+            let lastMileage = last?.mileage ?? 0
+            let distanceSince = max(0, currentMileage - lastMileage)
+            let remaining = max(0, interval - distanceSince)
+            let progress = 1.0 - min(Double(distanceSince) / Double(interval), 1.0)
+            
+            let info = DueInfo(type: t, progress: progress, etaKm: remaining, intervalKm: interval)
+            if let b = best {
+                if info.progress < b.progress { best = info }
+            } else {
+                best = info
+            }
+        }
+        return best
+    }
+}
+
