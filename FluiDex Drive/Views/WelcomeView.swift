@@ -3,48 +3,76 @@ import SwiftUI
 struct WelcomeView: View {
     @Binding var isLoggedIn: Bool
     @Binding var hasSelectedCar: Bool
-    
+    @Binding var showLogin: Bool
+
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            
+            // 🖤 Градиентный фон
+            LinearGradient(
+                gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
             VStack(spacing: 30) {
                 Spacer()
-                
-                Image("JeepCompass")
+
+                // 🚙 Изображение автомобиля
+                Image("JeepCompass") // добавь в Assets картинку из макета
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 220, height: 150)
-                
+                    .frame(width: 240, height: 160)
+                    .shadow(color: .cyan.opacity(0.4), radius: 20, y: 8)
+
+                // 🩵 Заголовок
                 Text("Welcome to")
-                    .font(.title2)
-                    .foregroundColor(.white)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+
                 Text("FluiDex Drive")
-                    .font(.largeTitle.bold())
+                    .font(.system(size: 36, weight: .bold))
                     .foregroundColor(.white)
-                
+                    .shadow(color: .cyan.opacity(0.6), radius: 10, y: 4)
+
                 Spacer()
-                
+
+                // 💛 Кнопка
                 Button(action: {
-                    isLoggedIn = true
+                    showLogin = true
                 }) {
                     Text("Get Started")
-                        .font(.headline.bold())
-                        .foregroundColor(.black)
-                        .padding()
+                        .font(.system(size: 18, weight: .bold))
                         .frame(maxWidth: .infinity)
+                        .padding()
                         .background(Color(hex: "#FFD54F"))
-                        .cornerRadius(25)
-                        .shadow(color: .yellow.opacity(0.5), radius: 8, y: 3)
+                        .foregroundColor(.black)
+                        .cornerRadius(30)
+                        .shadow(color: Color.yellow.opacity(0.4), radius: 12, y: 6)
                 }
-                .padding(.horizontal, 40)
-                
-                Spacer()
+                .padding(.horizontal, 50)
+                .padding(.bottom, 40)
+
+                // 🔹 Подпись с логотипом
+                HStack(spacing: 6) {
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 100, height: 22)
+//                    Text("FluiDex")
+//                        .font(.system(size: 14, weight: .semibold))
+//                        .foregroundColor(.white.opacity(0.6))
+                }
+                .padding(.bottom, 16)
             }
         }
     }
 }
 
 #Preview {
-    WelcomeView(isLoggedIn: .constant(false), hasSelectedCar: .constant(false))
+    WelcomeView(
+        isLoggedIn: .constant(false),
+        hasSelectedCar: .constant(false),
+        showLogin: .constant(false)
+    )
 }
