@@ -55,10 +55,10 @@ struct WelcomeView: View {
 
                 // 🔹 Подпись с логотипом
                 HStack(spacing: 6) {
-                    Image("logo")
+                    Image("logoWelcome")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 100, height: 22)
+                        .frame(width: 500, height: 122)
 //                    Text("FluiDex")
 //                        .font(.system(size: 14, weight: .semibold))
 //                        .foregroundColor(.white.opacity(0.6))
