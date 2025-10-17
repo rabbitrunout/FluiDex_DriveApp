@@ -39,7 +39,9 @@ struct WelcomeView: View {
 
                 // 💛 Кнопка
                 Button(action: {
-                    showLogin = true
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        showLogin = true
+                    }
                 }) {
                     Text("Get Started")
                         .font(.system(size: 18, weight: .bold))
@@ -52,6 +54,8 @@ struct WelcomeView: View {
                 }
                 .padding(.horizontal, 50)
                 .padding(.bottom, 40)
+
+            
 
                 // 🔹 Подпись с логотипом
                 HStack(spacing: 6) {
