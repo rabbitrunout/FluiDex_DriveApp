@@ -5,93 +5,59 @@ struct CarSelectionView: View {
     @Binding var hasSelectedCar: Bool
     @Environment(\.managedObjectContext) private var viewContext
     
-    // 🔹 Список доступных машин
+    // 🔹 Пример списка машин (можно позже подгружать из CoreData или API)
     let cars = [
-        ("BMW", "X5", 2022, 12000, "BMWX5"),
-        ("Toyota", "Corolla", 2018, 80000, "ToyotaCorolla"),
-        ("Jeep", "Compass", 2020, 45000, "JeepCompass"),
-        ("Mazda", "CX-5", 2021, 30000, "system") // system → заглушка
+        ("BMW X5", "BMWX5", "Luxury SUV with comfort and style", "#42A5F5"),
+        ("Toyota Corolla", "ToyotaCorolla", "Reliable daily car", "#FFD54F"),
+        ("Jeep Compass", "JeepCompass", "Adventure-ready compact SUV", "#FF7043"),
+        ("Mazda CX-5", "MazdaCX5", "Sporty crossover for families", "#81D4FA")
     ]
     
     var body: some View {
         ZStack {
-            Color(hex: "#FFE082").ignoresSafeArea()
-            
-            VStack(spacing: 20) {
+            // 🌌 Неоновый фон
+            LinearGradient(
+                gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 25) {
                 Text("Select Your Car")
-                    .font(.title.bold())
-                    .foregroundColor(.red)
-                
-                ScrollView {
-                    VStack(spacing: 16) {
-                        ForEach(cars, id: \.1) { car in
-                            Button(action: {
-                                saveCar(make: car.0, model: car.1, year: car.2, mileage: car.3, imageName: car.4)
-                                hasSelectedCar = true
-                            }) {
-                                HStack {
-                                    if car.4 == "system" {
-                                        Image(systemName: "car.fill")
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 60, height: 40)
-                                            .foregroundColor(.white)
-                                            .padding(.trailing, 8)
-                                    } else {
-                                        Image(car.4) // PNG в Assets
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 80, height: 50)
-                                            .padding(.trailing, 8)
-                                    }
-                                    
-                                    VStack(alignment: .leading) {
-                                        Text("\(car.0) \(car.1)")
-                                            .font(.headline)
-                                            .foregroundColor(.black)
-                                        Text("Year \(car.2)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.black.opacity(0.7))
-                                    }
-                                    Spacer()
-                                }
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color(hex: "#FF7043"))
-                                .cornerRadius(12)
-                                .shadow(color: .black.opacity(0.15), radius: 5, y: 3)
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: .cyan.opacity(0.7), radius: 10, y: 5)
+                    .padding(.top, 50)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 22) {
+                        ForEach(cars, id: \.0) { car in
+                            CarCard(
+                                title: car.0,
+                                imageName: car.1,
+                                description: car.2,
+                                colorHex: car.3
+                            ) {
+                                selectCar(named: car.0)
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 25)
+                    .padding(.bottom, 60)
                 }
-                
-                Spacer()
             }
-            .padding()
         }
     }
-    
-    // 🔹 Сохраняем выбранную машину в CoreData
-    private func saveCar(make: String, model: String, year: Int, mileage: Int, imageName: String) {
-        let newCar = Car(context: viewContext)
-        newCar.id = UUID()
-        newCar.make = make
-        newCar.model = model
-        newCar.year = Int16(year)
-        newCar.mileage = Int32(mileage)
-        newCar.imageName = imageName // 🔥 сохраним PNG/asset имя
-        
-        do {
-            try viewContext.save()
-            print("✅ Car saved: \(make) \(model) with image \(imageName)")
-        } catch {
-            print("❌ Error saving car: \(error.localizedDescription)")
+
+    // 🧠 Сохраняем выбор машины
+    private func selectCar(named name: String) {
+        withAnimation(.easeInOut(duration: 0.4)) {
+            hasSelectedCar = true
         }
+        print("✅ Selected car: \(name)")
     }
 }
-
-
 
 #Preview {
     CarSelectionView(hasSelectedCar: .constant(false))
