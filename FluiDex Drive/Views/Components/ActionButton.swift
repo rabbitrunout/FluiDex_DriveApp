@@ -1,36 +1,37 @@
 import SwiftUI
 
 struct ActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    
+    var title: String
+    var icon: String
+    var color: Color
+    var action: () -> Void
+
     var body: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.2))
-                    .frame(width: 60, height: 60)
-                
+        Button(action: action) {
+            HStack {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(color)
+                Text(title)
+                    .fontWeight(.semibold)
             }
-            
-            Text(title)
-                .font(.footnote.bold())
-                .foregroundColor(.black)
+            .foregroundColor(.black)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(color)
+            .cornerRadius(12)
+            .shadow(color: color.opacity(0.6), radius: 10, y: 4)
         }
-        .frame(width: 80)
     }
 }
 
-#Preview {
-    HStack(spacing: 20) {
-        ActionButton(title: "Log Service", icon: "wrench.fill", color: .orange)
-        ActionButton(title: "Expenses", icon: "dollarsign.circle.fill", color: .green)
-        ActionButton(title: "Assistant", icon: "questionmark.circle.fill", color: .purple)
+#Preview("ActionButton Preview") {
+    ActionButton(
+        title: "Add Service",
+        icon: "plus.circle.fill",
+        color: Color(hex: "#FFD54F")
+    ) {
+        print("Tapped")
     }
     .padding()
-    .background(Color(hex: "#FFE082"))
+    .background(Color.black)
 }

@@ -1,32 +1,37 @@
 import SwiftUI
 
 struct TipBanner: View {
-    let message: String
-    
+    var message: String
+    var icon: String = "lightbulb"
+    var color: Color = Color(hex: "#FFD54F")
+
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "lightbulb.fill")
-                .foregroundColor(.yellow)
-                .font(.title3)
-            
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(color)
+                .shadow(color: color.opacity(0.7), radius: 8, y: 3)
+
             Text(message)
-                .font(.footnote)
-                .foregroundColor(.black)
+                .foregroundColor(.white)
+                .font(.system(size: 16, weight: .medium))
                 .multilineTextAlignment(.leading)
-            
+
             Spacer()
         }
         .padding()
-        .background(Color.white.opacity(0.6))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 3)
-        .padding(.horizontal, 20)
+        .background(Color.white.opacity(0.06))
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(color.opacity(0.5), lineWidth: 1)
+        )
+        .shadow(color: color.opacity(0.3), radius: 10, y: 5)
     }
 }
 
-#Preview {
-    ZStack {
-        Color(hex: "#FFE082").ignoresSafeArea()
-        TipBanner(message: "💡 Tip: Check your oil dipstick once a month for peace of mind.")
-    }
+#Preview("TipBanner Preview") {
+    TipBanner(message: "Remember to check your tire pressure every 2 weeks!")
+        .padding()
+        .background(Color.black)
 }

@@ -2,20 +2,24 @@ import SwiftUI
 import CoreData
 
 struct RegisterView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+
     @Binding var isLoggedIn: Bool
     @Binding var hasSelectedCar: Bool
     @Binding var showLogin: Bool
     @Binding var showRegister: Bool
+    @Binding var showWelcomeAnimation: Bool  // 👈 новый флаг для приветствия
 
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorMessage = ""
+    @State private var isSaving = false
 
     var body: some View {
         ZStack {
-            // 🌌 Неоновый градиентный фон
+            // 🌌 Неоновый градиент
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -32,7 +36,7 @@ struct RegisterView: View {
                     .foregroundColor(.white)
                     .shadow(color: .cyan.opacity(0.6), radius: 12, y: 5)
 
-                // ✨ Поля ввода
+                // ✨ Поля
                 VStack(spacing: 18) {
                     glowingField("Full Name", text: $name, icon: "person.fill")
                     glowingField("Email", text: $email, icon: "envelope.fill")
@@ -53,37 +57,77 @@ struct RegisterView: View {
                 }
 
                 // 💛 Кнопка регистрации
-                NeonButton(title: "Sign Up") {
-                    if name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty {
-                        errorMessage = "Please fill in all fields"
-                    } else if password != confirmPassword {
-                        errorMessage = "Passwords do not match"
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            showRegister = false
-                            showLogin = true // ⬅️ переход сразу на экран входа
-                        }
-                    }
+                NeonButton(title: isSaving ? "Creating..." : "Sign Up") {
+                    registerUser()
                 }
+                .disabled(isSaving)
                 .padding(.top, 25)
 
-                // 🔙 Кнопка "Already have an account?"
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.4)) {
+                // 🔙 Вход
+                Button {
+                    withAnimation {
                         showRegister = false
                         showLogin = true
                     }
-                }) {
+                } label: {
                     Text("Already have an account? Log In")
                         .foregroundColor(.white.opacity(0.9))
                         .font(.footnote)
                         .underline()
                 }
-                .padding(.top, 10)
 
                 Spacer()
             }
         }
+    }
+
+    // MARK: 💾 Регистрация
+    private func registerUser() {
+        errorMessage = ""
+        guard !name.isEmpty, !email.isEmpty, !password.isEmpty else {
+            errorMessage = "Please fill in all fields"
+            return
+        }
+        guard password == confirmPassword else {
+            errorMessage = "Passwords do not match"
+            return
+        }
+
+        isSaving = true
+
+        let request: NSFetchRequest<User> = User.fetchRequest()
+        request.predicate = NSPredicate(format: "email == %@", email.lowercased())
+
+        do {
+            let existing = try viewContext.fetch(request)
+            if !existing.isEmpty {
+                errorMessage = "Email already registered"
+                isSaving = false
+                return
+            }
+
+            let newUser = User(context: viewContext)
+            newUser.id = UUID()
+            newUser.name = name
+            newUser.email = email.lowercased()
+            newUser.password = password
+            newUser.createdAt = Date()
+
+            try viewContext.save()
+            print("✅ User registered: \(name)")
+
+            // 🚀 Показ приветственного экрана
+            withAnimation {
+                showWelcomeAnimation = true
+                showRegister = false
+            }
+
+        } catch {
+            errorMessage = "Error: \(error.localizedDescription)"
+            print("❌ Registration failed: \(error)")
+        }
+
+        isSaving = false
     }
 }
 
@@ -92,6 +136,8 @@ struct RegisterView: View {
         isLoggedIn: .constant(false),
         hasSelectedCar: .constant(false),
         showLogin: .constant(false),
-        showRegister: .constant(true)
+        showRegister: .constant(true),
+        showWelcomeAnimation: .constant(false)
     )
+    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }

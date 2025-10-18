@@ -1,59 +1,52 @@
 import SwiftUI
 
 struct ServiceCard: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let mileage: String
-    let color: Color
-    
+    var icon: String
+    var title: String
+    var subtitle: String
+    var mileage: String
+    var color: Color
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(.white)
-                .padding(10)
-                .background(color)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            
+                .font(.system(size: 28))
+                .foregroundColor(color)
+                .shadow(color: color.opacity(0.8), radius: 8, y: 3)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(.black)
+                    .foregroundColor(.white)
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundColor(.black.opacity(0.7))
-                Text("Mileage: \(mileage) km")
+                    .foregroundColor(.white.opacity(0.7))
+                Text(mileage)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(color)
             }
+
             Spacer()
         }
         .padding()
-        .background(color.opacity(0.2))
-        .cornerRadius(12)
-        .shadow(color: color.opacity(0.3), radius: 5, x: 0, y: 3)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(15)
+        .overlay(
+            RoundedRectangle(cornerRadius: 15)
+                .stroke(color.opacity(0.4), lineWidth: 1)
+        )
+        .shadow(color: color.opacity(0.3), radius: 10, y: 5)
     }
 }
 
-#Preview {
-    VStack(spacing: 16) {
-        ServiceCard(
-            icon: "drop.fill",
-            title: "Oil Change",
-            subtitle: "Next in 1,200 km",
-            mileage: "25,200",
-            color: .red
-        )
-        
-        ServiceCard(
-            icon: "wrench.adjustable.fill",
-            title: "Inspection",
-            subtitle: "Sep 2025",
-            mileage: "82,000",
-            color: .orange
-        )
-    }
+#Preview("ServiceCard Preview") {
+    ServiceCard(
+        icon: "wrench.and.screwdriver",
+        title: "Oil Change",
+        subtitle: "Replaced filter and synthetic oil",
+        mileage: "Mileage: 85,200 km",
+        color: Color(hex: "#FFD54F")
+    )
     .padding()
-    .background(Color(hex: "#FFF3CD"))
+    .background(Color.black)
 }

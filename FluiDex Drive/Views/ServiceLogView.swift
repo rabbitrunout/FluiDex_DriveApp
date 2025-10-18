@@ -17,7 +17,7 @@ struct ServiceLogView: View {
         animation: .easeInOut
     ) private var serviceRecords: FetchedResults<ServiceRecord>
 
-    let categories = ["All", "Oil", "Tires", "Fluids", "Other"]
+    let categories = ["All", "Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
 
     var body: some View {
         ZStack {
@@ -28,8 +28,11 @@ struct ServiceLogView: View {
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
+            
+            
 
             VStack(spacing: 20) {
+                
                 // 🏁 Заголовок
                 Text("Service Log")
                     .font(.system(size: 30, weight: .bold))
@@ -76,12 +79,15 @@ struct ServiceLogView: View {
                                 ZStack(alignment: .leading) {
                                     // 🧾 Карточка сервиса
                                     HStack(spacing: 16) {
-                                        Image(systemName: iconForType(record.type ?? ""))
+                                        let iconName = iconForType(record.type ?? "")
+                                        Image(systemName: iconName)
                                             .resizable()
                                             .scaledToFit()
                                             .frame(width: 36, height: 36)
-                                            .foregroundColor(.yellow)
-                                            .shadow(color: .yellow.opacity(0.5), radius: 8, y: 4)
+                                            .foregroundColor(colorForType(record.type ?? ""))
+                                            .shadow(color: colorForType(record.type ?? "").opacity(0.7), radius: 12, y: 5)
+//                                            .glow(color: colorForType(record.type ?? ""), radius: 15)
+                                            .animation(.easeInOut(duration: 0.3), value: record.type)
 
                                         VStack(alignment: .leading, spacing: 6) {
                                             Text(record.type ?? "Unknown")
@@ -124,7 +130,7 @@ struct ServiceLogView: View {
                                     .padding(.horizontal, 20)
                                     .zIndex(0)
 
-                                    // 🚗 Машинка + неоновая пыль
+                                    // 🚗 Машинка + пыль при удалении
                                     if deletingServiceID == record.objectID.uriRepresentation().absoluteString {
                                         ZStack {
                                             if showDust {
@@ -223,21 +229,31 @@ struct ServiceLogView: View {
         return f.string(from: date)
     }
 
-    private func iconForType(_ type: String) -> String {
+    private func colorForType(_ type: String) -> Color {
         switch type {
-        case "Oil":
-            return "drop.fill" // ✅ существует, выглядит как капля
-        case "Tires":
-            return "circle.grid.cross"
-        case "Fluids":
-            return "thermometer.snowflake"
-        case "Other":
-            return "gearshape.fill"
-        default:
-            return "wrench.and.screwdriver.fill"
+        case "Oil": return Color(hex: "#FFD54F")
+        case "Tires": return Color(hex: "#FF7043")
+        case "Fluids": return Color(hex: "#4FC3F7")
+        case "Battery": return Color(hex: "#00E676")
+        case "Brakes": return Color(hex: "#EF5350")
+        case "Inspection": return Color(hex: "#BA68C8")
+        case "Other": return Color(hex: "#B0BEC5")
+        default: return Color.cyan
         }
     }
 
+    private func iconForType(_ type: String) -> String {
+        switch type {
+        case "Oil": return "drop.triangle.fill"
+        case "Tires": return "car.circle.fill"
+        case "Fluids": return "thermometer.low"
+        case "Battery": return "bolt.car.fill"
+        case "Brakes": return "stop.circle.fill"
+        case "Inspection": return "magnifyingglass.circle.fill"
+        case "Other": return "gearshape.fill"
+        default: return "wrench.and.screwdriver.fill"
+        }
+    }
 
     private func filteredRecords() -> [ServiceRecord] {
         selectedCategory == "All" ? Array(serviceRecords)
@@ -256,9 +272,7 @@ struct ServiceLogView: View {
         ZStack {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.spring()) { showDeleteAlert = false }
-                }
+                .onTapGesture { withAnimation(.spring()) { showDeleteAlert = false } }
 
             VStack(spacing: 20) {
                 Image(systemName: "trash.circle.fill")
@@ -276,9 +290,7 @@ struct ServiceLogView: View {
 
                 HStack(spacing: 20) {
                     Button {
-                        withAnimation(.spring()) {
-                            showDeleteAlert = false
-                        }
+                        withAnimation(.spring()) { showDeleteAlert = false }
                     } label: {
                         Text("Cancel")
                             .font(.headline)
@@ -294,8 +306,6 @@ struct ServiceLogView: View {
                             deletingServiceID = record.objectID.uriRepresentation().absoluteString
                             showDust = true
                             animateCar = true
-
-                            // ⏱ машинка едет и “пылим”
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                                 deleteRecord(record)
                                 animateCar = false
@@ -303,10 +313,7 @@ struct ServiceLogView: View {
                                 deletingServiceID = nil
                             }
                         }
-
-                        withAnimation(.spring()) {
-                            showDeleteAlert = false
-                        }
+                        withAnimation(.spring()) { showDeleteAlert = false }
                     } label: {
                         Text("Delete")
                             .font(.headline.bold())
@@ -330,7 +337,21 @@ struct ServiceLogView: View {
     }
 }
 
-#Preview {
+// MARK: - 🌈 Glow Extension
+//extension View {
+//    func glow(color: Color = .cyan, radius: CGFloat = 20) -> some View {
+//        self
+//            .shadow(color: color.opacity(0.6), radius: radius / 2)
+//            .shadow(color: color.opacity(0.4), radius: radius)
+//            .shadow(color: color.opacity(0.2), radius: radius * 2)
+//    }
+//}
+
+#Preview("ServiceLogView Preview") {
+    let context = PersistenceController.shared.container.viewContext
     ServiceLogView()
-        .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+        .environment(\.managedObjectContext, context)
+        .environmentObject(TabBarVisibility())
+        .background(Color.black)
 }
+

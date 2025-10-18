@@ -6,11 +6,11 @@ struct ContentView: View {
     @State private var hasSelectedCar = false
     @State private var showLogin = false
     @State private var showRegister = false
-    @Namespace private var animation // 🌈 для плавных переходов
+    @State private var showWelcomeAnimation = false
+    @State private var selectedTab = 0 // 👈 добавлено
 
     var body: some View {
         ZStack {
-            // 🌌 Общий фон для всех экранов
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -18,18 +18,14 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            // 🟣 1. Экран приветствия
-            if !isLoggedIn && !showLogin && !showRegister {
-                WelcomeView(
-                    isLoggedIn: $isLoggedIn,
-                    hasSelectedCar: $hasSelectedCar,
-                    showLogin: $showLogin
-                )
-                .transition(.opacity.combined(with: .scale))
-                .zIndex(0)
+            // 🟣 Welcome экран
+            if !isLoggedIn && !showLogin && !showRegister && !showWelcomeAnimation {
+                WelcomeView(isLoggedIn: $isLoggedIn, hasSelectedCar: $hasSelectedCar, showLogin: $showLogin)
+                    .transition(.opacity)
+                    .zIndex(0)
             }
 
-            // 🟢 2. Экран входа
+            // 🟢 Login экран
             if showLogin {
                 LoginView(
                     isLoggedIn: $isLoggedIn,
@@ -37,38 +33,48 @@ struct ContentView: View {
                     showRegister: $showRegister,
                     showLogin: $showLogin
                 )
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(.move(edge: .trailing))
                 .zIndex(1)
-                .animation(.easeInOut(duration: 0.5), value: showLogin)
             }
 
-            
-            // 🟡 3. Экран регистрации
+            // 🟡 Register экран
             if showRegister {
                 RegisterView(
                     isLoggedIn: $isLoggedIn,
                     hasSelectedCar: $hasSelectedCar,
                     showLogin: $showLogin,
-                    showRegister: $showRegister // ✅ добавлено
+                    showRegister: $showRegister,
+                    showWelcomeAnimation: $showWelcomeAnimation
                 )
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(.move(edge: .trailing))
                 .zIndex(2)
-                .animation(.easeInOut(duration: 0.5), value: showRegister)
             }
 
+            // 🚗 Welcome Animation
+            if showWelcomeAnimation {
+                WelcomeAnimationView(
+                    userName: "Irina",
+                    showWelcome: $showWelcomeAnimation,
+                    isLoggedIn: $isLoggedIn,
+                    hasSelectedCar: $hasSelectedCar
+                )
+                .transition(.opacity)
+                .zIndex(3)
+            }
 
-            // 🔵 4. После входа
+            // 🔵 Основной контент
             if isLoggedIn {
                 if !hasSelectedCar {
                     CarSelectionView(hasSelectedCar: $hasSelectedCar)
                         .transition(.move(edge: .trailing))
-                        .zIndex(3)
-                } else {
-                    MainTabView()
-                        .transition(.opacity)
                         .zIndex(4)
+                } else {
+                    MainTabView(selectedTab: $selectedTab, isLoggedIn: $isLoggedIn) // ✅ вот здесь
+                        .transition(.opacity)
+                        .zIndex(5)
                 }
             }
+
         }
     }
 }
