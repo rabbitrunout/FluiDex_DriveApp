@@ -171,29 +171,30 @@ struct AddServiceView: View {
 
     // MARK: - 💾 Сохранение записи
     private func saveService() {
-        isSaving = true
         let newRecord = ServiceRecord(context: viewContext)
         newRecord.id = UUID()
         newRecord.type = serviceType
         newRecord.mileage = Int32(mileage) ?? 0
         newRecord.date = date
         newRecord.note = note
-        newRecord.costParts = Double(costParts) ?? 0
-        newRecord.costLabor = Double(costLabor) ?? 0
         newRecord.nextServiceKm = Int32((Int(mileage) ?? 0) + 10000)
         newRecord.nextServiceDate = Calendar.current.date(byAdding: .day, value: 180, to: date)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            do {
-                try viewContext.save()
-                isSaving = false
-                dismiss()
-            } catch {
-                print("❌ Error saving: \(error.localizedDescription)")
-                isSaving = false
-            }
+        // 🚗 Привязка к активной машине
+        let fetch: NSFetchRequest<Car> = Car.fetchRequest()
+        fetch.predicate = NSPredicate(format: "isSelected == true")
+        if let activeCar = try? viewContext.fetch(fetch).first {
+            newRecord.car = activeCar
+        }
+
+        do {
+            try viewContext.save()
+            dismiss()
+        } catch {
+            print("❌ Error saving service: \(error.localizedDescription)")
         }
     }
+
 }
 
 #Preview {

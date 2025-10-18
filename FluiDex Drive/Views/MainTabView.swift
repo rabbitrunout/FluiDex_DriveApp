@@ -2,28 +2,37 @@ import SwiftUI
 
 struct MainTabView: View {
     @Binding var selectedTab: Int
-    @Binding var isLoggedIn: Bool  // 👈 добавлено
+    @Binding var isLoggedIn: Bool
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // ⛔ DashboardView больше не нужен
+            // 🏠 Главная панель
+            DashboardView()
+                .tabItem {
+                    Label("Dashboard", systemImage: "speedometer")
+                }
+                .tag(0)
+
+            // 🧾 Сервисный журнал
             ServiceLogView()
                 .tabItem {
                     Label("Services", systemImage: "wrench.and.screwdriver")
                 }
-                .tag(0)
+                .tag(1)
 
+            // 💡 Советы
             TipsView()
                 .tabItem {
                     Label("Tips", systemImage: "lightbulb")
                 }
-                .tag(1)
+                .tag(2)
 
-            ProfileView(isLoggedIn: $isLoggedIn) // 👈 теперь доступен параметр
+            // 👤 Профиль
+            ProfileView(isLoggedIn: $isLoggedIn)
                 .tabItem {
                     Label("Profile", systemImage: "person.crop.circle")
                 }
-                .tag(2)
+                .tag(3)
         }
         .accentColor(Color(hex: "#FFD54F"))
         .background(

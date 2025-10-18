@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24299" systemVersion="25A362" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
     <entity name="Car" representedClassName=".Car" syncable="YES" codeGenerationType="class">
+        <attribute name="fuelType" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="imageName" optional="YES" attributeType="String"/>
-        <attribute name="make" optional="YES" attributeType="String"/>
+        <attribute name="isSelected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="mileage" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="model" optional="YES" attributeType="String"/>
-        <attribute name="year" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="ownerEmail" optional="YES" attributeType="String"/>
+        <attribute name="vin" optional="YES" attributeType="String"/>
+        <attribute name="year" optional="YES" attributeType="String"/>
         <relationship name="fluids" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Fluid" inverseName="car" inverseEntity="Fluid"/>
-        <relationship name="records" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ServiceRecord" inverseName="car" inverseEntity="ServiceRecord"/>
+        <relationship name="records" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ServiceRecord"/>
         <relationship name="rules" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ServiceRule" inverseName="car" inverseEntity="ServiceRule"/>
-        <relationship name="services" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Service" inverseName="car" inverseEntity="Service"/>
+        <relationship name="services" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ServiceRecord" inverseName="car" inverseEntity="ServiceRecord"/>
         <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="cars" inverseEntity="User"/>
     </entity>
     <entity name="Fluid" representedClassName=".Fluid" syncable="YES" codeGenerationType="class">
@@ -26,7 +30,7 @@
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="mileage" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="type" optional="YES" attributeType="String"/>
-        <relationship name="car" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Car" inverseName="services" inverseEntity="Car"/>
+        <relationship name="car" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Car"/>
     </entity>
     <entity name="ServiceRecord" representedClassName=".ServiceRecord" syncable="YES" codeGenerationType="class">
         <attribute name="costLabor" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
@@ -40,7 +44,7 @@
         <attribute name="receiptImageData" optional="YES" attributeType="Binary"/>
         <attribute name="totalCost" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="type" optional="YES" attributeType="String"/>
-        <relationship name="car" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Car" inverseName="records" inverseEntity="Car"/>
+        <relationship name="car" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Car" inverseName="services" inverseEntity="Car"/>
     </entity>
     <entity name="ServiceRule" representedClassName=".ServiceRule" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
