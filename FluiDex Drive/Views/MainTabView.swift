@@ -9,11 +9,8 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             // 🏠 Главная панель
-            DashboardView(isLoggedIn: $isLoggedIn)
-                .tabItem {
-                    Label("Dashboard", systemImage: "speedometer")
-                }
-                .tag(0)
+            
+
 
             // 🧾 Сервисный журнал
             ServiceLogView()

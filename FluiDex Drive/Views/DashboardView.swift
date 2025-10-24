@@ -3,7 +3,7 @@ import CoreData
 
 struct DashboardView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @Binding var isLoggedIn: Bool
+
     @AppStorage("currentUserName") private var currentUserName: String = "Guest"
     @AppStorage("currentUserEmail") private var currentUserEmail: String = "user@example.com"
 
@@ -183,24 +183,7 @@ struct DashboardView: View {
                             .environment(\.managedObjectContext, viewContext)
                     }
 
-                    // 🚪 Logout
-                    Button {
-                        withAnimation { isLoggedIn = false }
-                    } label: {
-                        HStack {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                            Text("Logout")
-                        }
-                        .font(.headline)
-                        .foregroundColor(.black)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color(hex: "#FFD54F"))
-                        .cornerRadius(30)
-                        .shadow(color: .yellow.opacity(0.5), radius: 10, y: 6)
-                    }
-                    .padding(.horizontal, 60)
-                    .padding(.bottom, 60)
+                    Spacer(minLength: 60)
                 }
             }
         }
@@ -210,7 +193,6 @@ struct DashboardView: View {
     }
 
     // MARK: - Helpers
-
     private func formatDate(_ date: Date?) -> String {
         guard let date = date else { return "N/A" }
         let formatter = DateFormatter()
@@ -247,6 +229,6 @@ struct DashboardView: View {
 }
 
 #Preview {
-    DashboardView(isLoggedIn: .constant(true))
+    DashboardView()
         .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }
