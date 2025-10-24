@@ -8,7 +8,7 @@ struct RegisterView: View {
     @Binding var hasSelectedCar: Bool
     @Binding var showLogin: Bool
     @Binding var showRegister: Bool
-    @Binding var showWelcomeAnimation: Bool  // 👈 новый флаг для приветствия
+    @Binding var showWelcomeAnimation: Bool
 
     @State private var name = ""
     @State private var email = ""
@@ -19,7 +19,7 @@ struct RegisterView: View {
 
     var body: some View {
         ZStack {
-            // 🌌 Неоновый градиент
+            // 🌌 Неоновый фон
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -30,20 +30,27 @@ struct RegisterView: View {
             VStack(spacing: 25) {
                 Spacer(minLength: 60)
 
-                // 🔷 Заголовок
+                // ✨ Заголовок
                 Text("Create Account")
                     .font(.system(size: 34, weight: .bold))
                     .foregroundColor(.white)
                     .shadow(color: .cyan.opacity(0.6), radius: 12, y: 5)
 
-                // ✨ Поля
+                // 🧾 Поля ввода
                 VStack(spacing: 18) {
                     glowingField("Full Name", text: $name, icon: "person.fill")
                     glowingField("Email", text: $email, icon: "envelope.fill")
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
-                    glowingSecureField("Password", text: $password, icon: "lock.fill")
-                    glowingSecureField("Confirm Password", text: $confirmPassword, icon: "checkmark.shield.fill")
+
+                    // 💫 Разделитель
+                    Divider()
+                        .background(Color.cyan.opacity(0.3))
+                        .padding(.horizontal, 10)
+
+                    // 🔒 Пароли
+                    GlowingSecureField(placeholder: "Password", icon: "lock.fill", text: $password)
+                    GlowingSecureField(placeholder: "Confirm Password", icon: "checkmark.shield.fill", text: $confirmPassword)
                 }
                 .padding(.horizontal, 35)
                 .padding(.top, 20)
@@ -63,7 +70,7 @@ struct RegisterView: View {
                 .disabled(isSaving)
                 .padding(.top, 25)
 
-                // 🔙 Вход
+                // 🔙 Переход на логин
                 Button {
                     withAnimation {
                         showRegister = false
@@ -81,7 +88,7 @@ struct RegisterView: View {
         }
     }
 
-    // MARK: 💾 Регистрация
+    // MARK: 💾 Регистрация пользователя
     private func registerUser() {
         errorMessage = ""
         guard !name.isEmpty, !email.isEmpty, !password.isEmpty else {
@@ -114,17 +121,19 @@ struct RegisterView: View {
             newUser.createdAt = Date()
 
             try viewContext.save()
-            print("✅ User registered: \(name)")
 
-            // 🚀 Показ приветственного экрана
+            // ✅ Сохраняем данные пользователя
+            UserDefaults.standard.set(name, forKey: "userName")
+            UserDefaults.standard.set(email, forKey: "userEmail")
+            UserDefaults.standard.set(true, forKey: "isLoggedIn")
+
+            // 🚀 Запуск приветственного экрана
             withAnimation {
                 showWelcomeAnimation = true
                 showRegister = false
             }
-
         } catch {
             errorMessage = "Error: \(error.localizedDescription)"
-            print("❌ Registration failed: \(error)")
         }
 
         isSaving = false

@@ -3,6 +3,9 @@ import CoreData
 
 struct DashboardView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Binding var isLoggedIn: Bool
+    @AppStorage("currentUserName") private var currentUserName: String = "Guest"
+    @AppStorage("currentUserEmail") private var currentUserEmail: String = "user@example.com"
 
     // 🧭 Активная машина
     @FetchRequest(
@@ -18,10 +21,11 @@ struct DashboardView: View {
     ) private var allRecords: FetchedResults<ServiceRecord>
 
     @State private var showAddService = false
+    @State private var showEditProfile = false
 
     var body: some View {
         ZStack {
-            // 🌌 Неоновый фон
+            // 🌌 Фон
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -30,7 +34,46 @@ struct DashboardView: View {
             .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 30) {
+                VStack(spacing: 28) {
+                    // 🧍 Профиль
+                    HStack(spacing: 16) {
+                        Circle()
+                            .fill(Color.cyan.opacity(0.2))
+                            .frame(width: 70, height: 70)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 35))
+                                    .foregroundColor(Color(hex: "#FFD54F"))
+                            )
+                            .shadow(color: .cyan.opacity(0.6), radius: 8, y: 4)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(currentUserName)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
+                            Text(currentUserEmail)
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+
+                        Spacer()
+
+                        Button {
+                            showEditProfile = true
+                        } label: {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.system(size: 26))
+                                .foregroundColor(.cyan)
+                                .shadow(color: .cyan.opacity(0.7), radius: 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 30)
+
+                    Divider()
+                        .overlay(Color.cyan.opacity(0.4))
+                        .padding(.horizontal, 60)
+
                     // 🚗 Активная машина
                     if let car = selectedCar.first {
                         VStack(spacing: 12) {
@@ -59,15 +102,15 @@ struct DashboardView: View {
                                 .foregroundColor(.white.opacity(0.7))
                                 .font(.subheadline)
                         }
-                        .padding(.top, 30)
+                        .padding(.top, 10)
                     } else {
                         Text("No car selected")
                             .foregroundColor(.white.opacity(0.6))
-                            .padding(.top, 60)
+                            .padding(.top, 40)
                     }
 
                     Divider()
-                        .overlay(Color.cyan.opacity(0.4))
+                        .overlay(Color.cyan.opacity(0.3))
                         .padding(.horizontal, 60)
 
                     // 📊 Следующее ТО
@@ -129,7 +172,7 @@ struct DashboardView: View {
                         }
                     }
 
-                    Spacer(minLength: 60)
+                    Spacer(minLength: 40)
 
                     // ➕ Добавить сервис
                     NeonButton(title: "Add Service Record") {
@@ -139,8 +182,30 @@ struct DashboardView: View {
                         AddServiceView()
                             .environment(\.managedObjectContext, viewContext)
                     }
+
+                    // 🚪 Logout
+                    Button {
+                        withAnimation { isLoggedIn = false }
+                    } label: {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                            Text("Logout")
+                        }
+                        .font(.headline)
+                        .foregroundColor(.black)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color(hex: "#FFD54F"))
+                        .cornerRadius(30)
+                        .shadow(color: .yellow.opacity(0.5), radius: 10, y: 6)
+                    }
+                    .padding(.horizontal, 60)
+                    .padding(.bottom, 60)
                 }
             }
+        }
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileView(currentName: $currentUserName, currentEmail: $currentUserEmail)
         }
     }
 
@@ -182,6 +247,6 @@ struct DashboardView: View {
 }
 
 #Preview {
-    DashboardView()
+    DashboardView(isLoggedIn: .constant(true))
         .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }

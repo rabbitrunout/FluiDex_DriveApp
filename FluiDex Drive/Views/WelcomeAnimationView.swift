@@ -74,5 +74,11 @@ struct WelcomeAnimationView: View {
 }
 
 #Preview {
-    WelcomeAnimationView(userName: "Irina", showWelcome: .constant(true), isLoggedIn: .constant(false), hasSelectedCar: .constant(false))
+    WelcomeAnimationView(
+        userName: "Preview User",
+        showWelcome: .constant(true),
+        isLoggedIn: .constant(false),
+        hasSelectedCar: .constant(false)
+    )
 }
+

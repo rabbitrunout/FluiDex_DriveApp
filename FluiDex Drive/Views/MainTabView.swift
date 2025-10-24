@@ -1,13 +1,15 @@
 import SwiftUI
+import CoreData
 
 struct MainTabView: View {
     @Binding var selectedTab: Int
     @Binding var isLoggedIn: Bool
+    @Environment(\.managedObjectContext) private var viewContext
 
     var body: some View {
         TabView(selection: $selectedTab) {
             // 🏠 Главная панель
-            DashboardView()
+            DashboardView(isLoggedIn: $isLoggedIn)
                 .tabItem {
                     Label("Dashboard", systemImage: "speedometer")
                 }
@@ -33,6 +35,14 @@ struct MainTabView: View {
                     Label("Profile", systemImage: "person.crop.circle")
                 }
                 .tag(3)
+
+            // ⚙️ Резервное копирование
+            BackupView()
+                .environment(\.managedObjectContext, viewContext)
+                .tabItem {
+                    Label("Backup", systemImage: "gearshape.fill")
+                }
+                .tag(4)
         }
         .accentColor(Color(hex: "#FFD54F"))
         .background(
@@ -48,4 +58,5 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView(selectedTab: .constant(0), isLoggedIn: .constant(true))
+        .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }

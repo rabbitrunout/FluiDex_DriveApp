@@ -113,6 +113,7 @@ struct CarSetupView: View {
         newCar.fuelType = carFuelType
         newCar.ownerEmail = userEmail
         newCar.isSelected = true
+        try? viewContext.save()
 
         do {
             // Сбрасываем все остальные машины как неактивные

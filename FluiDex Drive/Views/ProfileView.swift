@@ -8,10 +8,14 @@ struct ProfileView: View {
     @AppStorage("userEmail") private var userEmail: String = ""
 
     @State private var showCarSelection = false
+    @State private var isEditing = false
+    @State private var tempName = ""
+    @State private var tempEmail = ""
     @Binding var isLoggedIn: Bool
 
     var body: some View {
         ZStack {
+            // 🌌 Фон
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -21,8 +25,8 @@ struct ProfileView: View {
 
             ScrollView {
                 VStack(spacing: 25) {
-                    // 👤 User Info
-                    VStack(spacing: 8) {
+                    // 👤 Профиль
+                    VStack(spacing: 10) {
                         Image(systemName: "person.crop.circle.fill")
                             .resizable()
                             .scaledToFit()
@@ -30,19 +34,33 @@ struct ProfileView: View {
                             .foregroundColor(.yellow)
                             .shadow(color: .yellow.opacity(0.7), radius: 10)
 
-                        Text(userName)
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
+                        if isEditing {
+                            glowingField("Full Name", text: $tempName, icon: "person.fill")
+                                .padding(.horizontal, 40)
+                            glowingField("Email", text: $tempEmail, icon: "envelope.fill")
+                                .padding(.horizontal, 40)
+                        } else {
+                            Text(userName)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
+                            Text(userEmail)
+                                .foregroundColor(.white.opacity(0.7))
+                                .font(.subheadline)
+                        }
 
-                        Text(userEmail)
-                            .foregroundColor(.white.opacity(0.7))
-                            .font(.subheadline)
+                        Button(action: toggleEdit) {
+                            Label(isEditing ? "Save Changes" : "Edit Profile",
+                                  systemImage: isEditing ? "checkmark.circle.fill" : "pencil")
+                                .foregroundColor(Color(hex: "#FFD54F"))
+                                .font(.headline)
+                        }
+                        .padding(.top, 10)
                     }
                     .padding(.top, 40)
 
-                    Divider().background(.white.opacity(0.3)).padding(.horizontal)
+                    Divider().overlay(Color.white.opacity(0.3)).padding(.horizontal)
 
-                    // 🚘 Vehicle Info
+                    // 🚗 Машина
                     VStack(spacing: 15) {
                         HStack {
                             Text("My Vehicle")
@@ -85,12 +103,13 @@ struct ProfileView: View {
                     }
                     .padding(.horizontal)
 
-                    Divider().background(.white.opacity(0.3)).padding(.horizontal)
+                    Divider().overlay(Color.white.opacity(0.3)).padding(.horizontal)
 
-                    // 🚪 Logout Button
+                    // 🚪 Выход
                     Button {
                         withAnimation(.easeInOut(duration: 0.4)) {
                             isLoggedIn = false
+                            UserDefaults.standard.set(false, forKey: "isLoggedIn")
                         }
                     } label: {
                         HStack {
@@ -103,15 +122,45 @@ struct ProfileView: View {
                         .padding()
                         .background(Color(hex: "#FFD54F"))
                         .cornerRadius(30)
-                        .shadow(color: Color.yellow.opacity(0.4), radius: 10, y: 6)
+                        .shadow(color: .yellow.opacity(0.4), radius: 10, y: 6)
                     }
                     .padding(.horizontal, 60)
                     .padding(.bottom, 50)
                 }
             }
         }
+        .onAppear {
+            tempName = userName
+            tempEmail = userEmail
+        }
         .sheet(isPresented: $showCarSelection) {
             CarSelectionView(hasSelectedCar: .constant(true))
+        }
+    }
+
+    // MARK: ✏️ Редактирование профиля
+    private func toggleEdit() {
+        if isEditing {
+            // 💾 Сохраняем изменения в UserDefaults
+            userName = tempName
+            userEmail = tempEmail
+            UserDefaults.standard.set(tempName, forKey: "userName")
+            UserDefaults.standard.set(tempEmail, forKey: "userEmail")
+
+            // 💾 Сохраняем изменения в Core Data (если пользователь найден)
+            let request: NSFetchRequest<User> = User.fetchRequest()
+            request.predicate = NSPredicate(format: "email == %@", userEmail.lowercased())
+
+            if let user = try? viewContext.fetch(request).first {
+                user.name = tempName
+                user.email = tempEmail.lowercased()
+                try? viewContext.save()
+                print("✅ Profile updated for \(user.name ?? "unknown")")
+            }
+        }
+
+        withAnimation {
+            isEditing.toggle()
         }
     }
 }
