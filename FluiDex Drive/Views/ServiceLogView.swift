@@ -1,5 +1,7 @@
 import SwiftUI
 import CoreData
+import Combine   // ✅ добавь
+
 
 struct ServiceLogView: View {
     @Environment(\.managedObjectContext) private var viewContext

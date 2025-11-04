@@ -172,7 +172,84 @@ struct DashboardView: View {
                         }
                     }
 
-                    Spacer(minLength: 40)
+                    // 🌈 Переход к расписанию обслуживания
+                    NavigationLink(destination: MaintenanceScheduleView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "calendar.badge.clock")
+                                .foregroundColor(.cyan)
+                                .shadow(color: .cyan.opacity(0.6), radius: 8)
+                                .font(.title3)
+                            Text("View Maintenance Schedule")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .padding()
+                        .background(Color.white.opacity(0.06))
+                        .cornerRadius(16)
+                        .shadow(color: .cyan.opacity(0.4), radius: 8)
+                        .padding(.horizontal, 40)
+                    }
+                    .padding(.top, 12)
+
+                    // 🛠 Upcoming Maintenance Section
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Upcoming Maintenance")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.leading, 20)
+                            .padding(.top, 10)
+                        
+                        let upcomingItems = getUpcomingMaintenance(for: selectedCar.first)
+                        
+                        if upcomingItems.isEmpty {
+                            Text("No upcoming maintenance tasks.")
+                                .foregroundColor(.white.opacity(0.6))
+                                .padding(.leading, 20)
+                        } else {
+                            ForEach(upcomingItems.indices, id: \.self) { index in
+                                let item = upcomingItems[index]
+                                
+                                HStack(spacing: 16) {
+                                    // 🔧 Иконка типа обслуживания
+                                    Image(systemName: iconForMaintenance(item.title ?? ""))
+                                        .font(.system(size: 22))
+                                        .foregroundColor(colorForDate(item.nextChangeDate))
+                                        .shadow(color: colorForDate(item.nextChangeDate).opacity(0.8), radius: 6)
+                                        .frame(width: 28)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(item.title ?? "Unknown Task")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(.white)
+                                        Text("Due: \(formatDate(item.nextChangeDate))")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
+                                    Spacer()
+                                    
+                                    Image(systemName: "calendar.badge.exclamationmark")
+                                        .foregroundColor(colorForDate(item.nextChangeDate))
+                                        .shadow(color: .cyan.opacity(0.4), radius: 6)
+                                }
+                                .padding()
+                                .background(Color.white.opacity(0.06))
+                                .cornerRadius(16)
+                                .shadow(color: .cyan.opacity(0.3), radius: 8)
+                                .padding(.horizontal, 20)
+                                .opacity(0.0)
+                                .offset(y: 30)
+                                .animation(.easeOut(duration: 0.6).delay(Double(index) * 0.15), value: upcomingItems)
+                                .onAppear {
+                                    withAnimation {
+                                        // Этот блок просто триггерит анимацию при появлении
+                                    }
+                                }
+                            }
+
+                        }
+                    }
+                    .padding(.bottom, 10)
+
 
                     // ➕ Добавить сервис
                     NeonButton(title: "Add Service Record") {
@@ -226,6 +303,52 @@ struct DashboardView: View {
 
         return (last.nextServiceKm, last.nextServiceDate ?? Date())
     }
+
+    // MARK: - Maintenance Helpers
+    private func getUpcomingMaintenance(for car: Car?) -> [MaintenanceItem] {
+        guard let car else { return [] }
+        
+        let fetchRequest: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "car == %@", car)
+        fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)]
+        
+        do {
+            let allItems = try viewContext.fetch(fetchRequest)
+            let weekAhead = Calendar.current.date(byAdding: .day, value: 14, to: Date())!
+            return allItems.filter { ($0.nextChangeDate ?? Date.distantFuture) <= weekAhead }
+        } catch {
+            print("❌ Failed to fetch maintenance items: \(error)")
+            return []
+        }
+    }
+
+    private func colorForDate(_ date: Date?) -> Color {
+        guard let date else { return .gray }
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 0
+        switch days {
+        case ..<0:
+            return .red // просрочено
+        case 0...2:
+            return .orange // почти срок
+        case 3...7:
+            return .yellow // скоро
+        default:
+            return .cyan // всё ок
+        }
+    }
+    private func iconForMaintenance(_ title: String) -> String {
+        let lower = title.lowercased()
+        if lower.contains("oil") { return "oil.drop.fill" }
+        if lower.contains("brake") { return "car.rear.waves.up" }
+        if lower.contains("battery") { return "bolt.car.fill" }
+        if lower.contains("tire") { return "circle.grid.cross" }
+        if lower.contains("coolant") || lower.contains("fluid") { return "thermometer.snowflake" }
+        if lower.contains("filter") { return "aqi.medium" }
+        if lower.contains("transmission") { return "gearshape.2.fill" }
+        if lower.contains("inspection") { return "wrench.and.screwdriver" }
+        return "calendar" // дефолтная иконка
+    }
+
 }
 
 #Preview {

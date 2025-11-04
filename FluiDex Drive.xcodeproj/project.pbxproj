@@ -6,8 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		803262812EB182AD00B7FF3C /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 803262802EB182AD00B7FF3C /* GoogleService-Info.plist */; };
+		803262842EB1838600B7FF3C /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 803262832EB1838600B7FF3C /* FirebaseAuth */; };
+		803262862EB1838600B7FF3C /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 803262852EB1838600B7FF3C /* FirebaseCore */; };
+		803262882EB1838600B7FF3C /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 803262872EB1838600B7FF3C /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		800E74032E86C4E1000E00B8 /* FluiDex Drive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FluiDex Drive.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		803262802EB182AD00B7FF3C /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +31,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				803262862EB1838600B7FF3C /* FirebaseCore in Frameworks */,
+				803262842EB1838600B7FF3C /* FirebaseAuth in Frameworks */,
+				803262882EB1838600B7FF3C /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -34,6 +45,7 @@
 			children = (
 				800E74052E86C4E1000E00B8 /* FluiDex Drive */,
 				800E74042E86C4E1000E00B8 /* Products */,
+				803262802EB182AD00B7FF3C /* GoogleService-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -65,6 +77,9 @@
 			);
 			name = "FluiDex Drive";
 			packageProductDependencies = (
+				803262832EB1838600B7FF3C /* FirebaseAuth */,
+				803262852EB1838600B7FF3C /* FirebaseCore */,
+				803262872EB1838600B7FF3C /* FirebaseFirestore */,
 			);
 			productName = "FluiDex Drive";
 			productReference = 800E74032E86C4E1000E00B8 /* FluiDex Drive.app */;
@@ -78,7 +93,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2600;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					800E74022E86C4E1000E00B8 = {
 						CreatedOnToolsVersion = 26.0.1;
@@ -94,6 +109,9 @@
 			);
 			mainGroup = 800E73FA2E86C4E1000E00B8;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				803262822EB1838600B7FF3C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 800E74042E86C4E1000E00B8 /* Products */;
 			projectDirPath = "";
@@ -109,6 +127,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				803262812EB182AD00B7FF3C /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -184,6 +203,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -241,6 +261,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -257,6 +278,11 @@
 				DEVELOPMENT_TEAM = A3LWML52M7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "FluiDex-Drive-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app uses Bluetooth to connect to nearby car devices.\n";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Bluetooth access is required for live vehicle connection and diagnostics.\n";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -290,6 +316,11 @@
 				DEVELOPMENT_TEAM = A3LWML52M7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "FluiDex-Drive-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app uses Bluetooth to connect to nearby car devices.\n";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Bluetooth access is required for live vehicle connection and diagnostics.\n";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -334,6 +365,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		803262822EB1838600B7FF3C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		803262832EB1838600B7FF3C /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 803262822EB1838600B7FF3C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		803262852EB1838600B7FF3C /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 803262822EB1838600B7FF3C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		803262872EB1838600B7FF3C /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 803262822EB1838600B7FF3C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 800E73FB2E86C4E1000E00B8 /* Project object */;
 }

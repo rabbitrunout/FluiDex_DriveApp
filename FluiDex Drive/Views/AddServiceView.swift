@@ -189,6 +189,8 @@ struct AddServiceView: View {
 
         do {
             try viewContext.save()
+            FirebaseSyncManager(context: viewContext).syncServiceRecord(newRecord)
+
             dismiss()
         } catch {
             print("❌ Error saving service: \(error.localizedDescription)")

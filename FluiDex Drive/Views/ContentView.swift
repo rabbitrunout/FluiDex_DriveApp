@@ -62,14 +62,13 @@ struct ContentView: View {
 
             // 🚗 Welcome Animation
             if showWelcomeAnimation {
+                // ✅ Стало
                 WelcomeAnimationView(
-                    userName: currentUserName,
                     showWelcome: $showWelcomeAnimation,
                     isLoggedIn: $isLoggedIn,
                     hasSelectedCar: $hasSelectedCar
                 )
             }
-
 
             // 🔵 Основной контент
             if isLoggedIn {
@@ -87,9 +86,9 @@ struct ContentView: View {
                 }
             }
         }
-        // 🔁 При logout возвращаемся на экран входа
-        .onChange(of: isLoggedIn) { loggedIn in
-            if !loggedIn {
+        // 🔁 Новый синтаксис iOS 17
+        .onChange(of: isLoggedIn) { oldValue, newValue in
+            if newValue == false {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     selectedTab = 0
                     showLogin = true

@@ -16,7 +16,6 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            // 🌌 Неоновый фон
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -27,13 +26,11 @@ struct LoginView: View {
             VStack(spacing: 25) {
                 Spacer(minLength: 60)
 
-                // 🔷 Заголовок
                 Text("Welcome Back")
                     .font(.system(size: 34, weight: .bold))
                     .foregroundColor(.white)
                     .shadow(color: .cyan.opacity(0.6), radius: 12, y: 5)
 
-                // ✨ Поля
                 VStack(spacing: 18) {
                     glowingField("Email", text: $email, icon: "envelope.fill")
                     GlowingSecureField(placeholder: "Password", icon: "lock.fill", text: $password)
@@ -41,7 +38,6 @@ struct LoginView: View {
                 .padding(.horizontal, 35)
                 .padding(.top, 20)
 
-                // ⚠️ Ошибка
                 if !errorMessage.isEmpty {
                     Text(errorMessage)
                         .foregroundColor(.red)
@@ -49,13 +45,11 @@ struct LoginView: View {
                         .padding(.top, 5)
                 }
 
-                // 💛 Вход
                 NeonButton(title: "Log In") {
                     logInUser()
                 }
                 .padding(.top, 25)
 
-                // 🔵 Забыли пароль
                 Button {
                     showForgotPassword = true
                 } label: {
@@ -66,7 +60,6 @@ struct LoginView: View {
                 }
                 .padding(.top, 8)
 
-                // 🔙 Регистрация
                 Button {
                     withAnimation(.easeInOut(duration: 0.4)) {
                         showLogin = false
@@ -107,9 +100,20 @@ struct LoginView: View {
                 UserDefaults.standard.set(user.email, forKey: "userEmail")
                 UserDefaults.standard.set(true, forKey: "isLoggedIn")
 
+                // 🚗 Проверяем, есть ли выбранная машина
+                let carFetch: NSFetchRequest<Car> = Car.fetchRequest()
+                carFetch.predicate = NSPredicate(format: "isSelected == true")
+                let selectedCars = try viewContext.fetch(carFetch)
+
+                if let car = selectedCars.first {
+                    UserDefaults.standard.set(car.id?.uuidString, forKey: "selectedCarID")
+                    hasSelectedCar = true
+                } else {
+                    hasSelectedCar = false
+                }
+
                 withAnimation(.easeInOut(duration: 0.4)) {
                     isLoggedIn = true
-                    hasSelectedCar = false
                     showLogin = false
                 }
             } else {
@@ -119,14 +123,4 @@ struct LoginView: View {
             errorMessage = "Login error: \(error.localizedDescription)"
         }
     }
-}
-
-#Preview {
-    LoginView(
-        isLoggedIn: .constant(false),
-        hasSelectedCar: .constant(false),
-        showRegister: .constant(false),
-        showLogin: .constant(true)
-    )
-    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }

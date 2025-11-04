@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import CoreData
 
 struct ProfileView: View {

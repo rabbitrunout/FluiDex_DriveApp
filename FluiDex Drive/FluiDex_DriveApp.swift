@@ -1,43 +1,36 @@
 import SwiftUI
 import CoreData
+import Firebase
+import UserNotifications
 
 @main
 struct FluiDex_DriveApp: App {
-    @StateObject private var tabBar = TabBarVisibility()
     let persistenceController = PersistenceController.shared
-    @Environment(\.scenePhase) private var scenePhase
-
+    @AppStorage("isLoggedIn") private var isLoggedIn: Bool = false
+    @AppStorage("hasSelectedCar") private var hasSelectedCar: Bool = false
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppEntryView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                .environmentObject(tabBar)
-        }
-        // 💾 Централизованное сохранение Core Data
-        .onChange(of: scenePhase) { phase in
-            handleSceneChange(phase)
-        }
-    }
-
-    // MARK: - Сохранение контекста
-    private func handleSceneChange(_ phase: ScenePhase) {
-        let context = persistenceController.container.viewContext
-        switch phase {
-        case .background, .inactive:
-            saveContext(context)
-        default:
-            break
-        }
-    }
-
-    private func saveContext(_ context: NSManagedObjectContext) {
-        if context.hasChanges {
-            do {
-                try context.save()
-                print("✅ Context successfully saved in background")
-            } catch {
-                print("❌ Error saving context in background: \(error.localizedDescription)")
-            }
+                .onAppear {
+                    // 🚀 Инициализация Firebase
+                    FirebaseApp.configure()
+                    
+                    // 🔔 Запрос разрешения на уведомления (наш менеджер)
+                    NotificationManager.shared.requestPermission()
+                    
+                    // ☁️ Синхронизация с Firebase при старте
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        SyncService.shared.syncFromCloud(context: persistenceController.container.viewContext)
+                    }
+                }
+                // 🔁 Автоматическая проверка входа
+                .onChange(of: isLoggedIn) { oldValue, newValue in
+                    if !newValue {
+                        hasSelectedCar = false
+                    }
+                }
         }
     }
 }

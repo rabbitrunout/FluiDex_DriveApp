@@ -1,5 +1,7 @@
 import SwiftUI
 import CoreData
+import Combine   // ✅ добавь
+
 
 struct RegisterView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -42,13 +44,14 @@ struct RegisterView: View {
                     glowingField("Email", text: $email, icon: "envelope.fill")
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
 
-                    // 💫 Разделитель
                     Divider()
                         .background(Color.cyan.opacity(0.3))
                         .padding(.horizontal, 10)
 
-                    // 🔒 Пароли
+                    // 🔒 Пароль + подтверждение
                     GlowingSecureField(placeholder: "Password", icon: "lock.fill", text: $password)
                     GlowingSecureField(placeholder: "Confirm Password", icon: "checkmark.shield.fill", text: $confirmPassword)
                 }
@@ -60,7 +63,10 @@ struct RegisterView: View {
                     Text(errorMessage)
                         .foregroundColor(.red)
                         .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
                         .padding(.top, 5)
+                        .transition(.opacity)
                 }
 
                 // 💛 Кнопка регистрации
@@ -90,11 +96,21 @@ struct RegisterView: View {
 
     // MARK: 💾 Регистрация пользователя
     private func registerUser() {
-        errorMessage = ""
+        withAnimation {
+            errorMessage = ""
+        }
+
+        // 🧩 Проверки
         guard !name.isEmpty, !email.isEmpty, !password.isEmpty else {
             errorMessage = "Please fill in all fields"
             return
         }
+
+        guard password.count >= 6 else {
+            errorMessage = "Password must be at least 6 characters"
+            return
+        }
+
         guard password == confirmPassword else {
             errorMessage = "Passwords do not match"
             return
@@ -102,6 +118,7 @@ struct RegisterView: View {
 
         isSaving = true
 
+        // Проверяем, есть ли уже такой email
         let request: NSFetchRequest<User> = User.fetchRequest()
         request.predicate = NSPredicate(format: "email == %@", email.lowercased())
 
@@ -113,27 +130,32 @@ struct RegisterView: View {
                 return
             }
 
+            // 🆕 Создание нового пользователя
             let newUser = User(context: viewContext)
             newUser.id = UUID()
-            newUser.name = name
+            newUser.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
             newUser.email = email.lowercased()
             newUser.password = password
             newUser.createdAt = Date()
 
             try viewContext.save()
 
-            // ✅ Сохраняем данные пользователя
-            UserDefaults.standard.set(name, forKey: "userName")
-            UserDefaults.standard.set(email, forKey: "userEmail")
+            // ✅ Сохраняем данные в UserDefaults
+            UserDefaults.standard.set(newUser.name, forKey: "userName")
+            UserDefaults.standard.set(newUser.email, forKey: "userEmail")
             UserDefaults.standard.set(true, forKey: "isLoggedIn")
 
-            // 🚀 Запуск приветственного экрана
-            withAnimation {
-                showWelcomeAnimation = true
+            // 🚀 Автоматический вход
+            withAnimation(.easeInOut(duration: 0.5)) {
                 showRegister = false
+                showWelcomeAnimation = true
+                isLoggedIn = true
+                hasSelectedCar = false
             }
+
         } catch {
-            errorMessage = "Error: \(error.localizedDescription)"
+            errorMessage = "Error saving user: \(error.localizedDescription)"
+            print("❌ Registration error: \(error.localizedDescription)")
         }
 
         isSaving = false
