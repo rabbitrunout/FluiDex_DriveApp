@@ -1,6 +1,8 @@
 import SwiftUI
 import CoreBluetooth
 import AVFoundation
+import Combine   // ✅ Добавь эту строчку
+
 
 struct BluetoothConnectView: View {
     @StateObject private var manager = BluetoothManager()
