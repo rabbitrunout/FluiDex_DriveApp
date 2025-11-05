@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import Foundation
 
 struct DashboardView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -22,6 +23,7 @@ struct DashboardView: View {
 
     @State private var showAddService = false
     @State private var showEditProfile = false
+    @State private var aiPredictions: [MaintenancePrediction] = []
 
     var body: some View {
         ZStack {
@@ -198,9 +200,9 @@ struct DashboardView: View {
                             .foregroundColor(.white)
                             .padding(.leading, 20)
                             .padding(.top, 10)
-                        
+
                         let upcomingItems = getUpcomingMaintenance(for: selectedCar.first)
-                        
+
                         if upcomingItems.isEmpty {
                             Text("No upcoming maintenance tasks.")
                                 .foregroundColor(.white.opacity(0.6))
@@ -208,15 +210,14 @@ struct DashboardView: View {
                         } else {
                             ForEach(upcomingItems.indices, id: \.self) { index in
                                 let item = upcomingItems[index]
-                                
+
                                 HStack(spacing: 16) {
-                                    // 🔧 Иконка типа обслуживания
                                     Image(systemName: iconForMaintenance(item.title ?? ""))
                                         .font(.system(size: 22))
                                         .foregroundColor(colorForDate(item.nextChangeDate))
                                         .shadow(color: colorForDate(item.nextChangeDate).opacity(0.8), radius: 6)
                                         .frame(width: 28)
-                                    
+
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(item.title ?? "Unknown Task")
                                             .font(.system(size: 16, weight: .semibold))
@@ -226,7 +227,7 @@ struct DashboardView: View {
                                             .foregroundColor(.white.opacity(0.7))
                                     }
                                     Spacer()
-                                    
+
                                     Image(systemName: "calendar.badge.exclamationmark")
                                         .foregroundColor(colorForDate(item.nextChangeDate))
                                         .shadow(color: .cyan.opacity(0.4), radius: 6)
@@ -236,20 +237,52 @@ struct DashboardView: View {
                                 .cornerRadius(16)
                                 .shadow(color: .cyan.opacity(0.3), radius: 8)
                                 .padding(.horizontal, 20)
-                                .opacity(0.0)
-                                .offset(y: 30)
-                                .animation(.easeOut(duration: 0.6).delay(Double(index) * 0.15), value: upcomingItems)
-                                .onAppear {
-                                    withAnimation {
-                                        // Этот блок просто триггерит анимацию при появлении
-                                    }
-                                }
                             }
-
                         }
                     }
                     .padding(.bottom, 10)
 
+                    // 🤖 AI Predicted Services
+                    if !aiPredictions.isEmpty {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("AI Predicted Services")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.leading, 20)
+                                .padding(.top, 10)
+
+                            ForEach(aiPredictions) { prediction in
+                                HStack(spacing: 16) {
+                                    Image(systemName: iconForMaintenance(prediction.type))
+                                        .foregroundColor(.cyan)
+                                        .shadow(color: .cyan.opacity(0.8), radius: 6)
+                                        .font(.system(size: 22))
+                                        .frame(width: 28)
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(prediction.type)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(.white)
+                                        Text("Due: \(formatDate(prediction.nextDate)) • \(prediction.nextMileage) km")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "brain.head.profile")
+                                        .foregroundColor(.cyan)
+                                        .shadow(color: .cyan.opacity(0.4), radius: 6)
+                                }
+                                .padding()
+                                .background(Color.white.opacity(0.06))
+                                .cornerRadius(16)
+                                .shadow(color: .cyan.opacity(0.3), radius: 8)
+                                .padding(.horizontal, 20)
+                            }
+                        }
+                        .padding(.bottom, 10)
+                    }
 
                     // ➕ Добавить сервис
                     NeonButton(title: "Add Service Record") {
@@ -266,6 +299,12 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileView(currentName: $currentUserName, currentEmail: $currentUserEmail)
+        }
+        .onAppear {
+            if let car = selectedCar.first {
+                let records = allRecords.filter { $0.car == car }
+                aiPredictions = AIMaintenanceEngine.shared.predictNextMaintenance(for: car, using: records)
+            }
         }
     }
 
@@ -304,14 +343,13 @@ struct DashboardView: View {
         return (last.nextServiceKm, last.nextServiceDate ?? Date())
     }
 
-    // MARK: - Maintenance Helpers
     private func getUpcomingMaintenance(for car: Car?) -> [MaintenanceItem] {
         guard let car else { return [] }
-        
+
         let fetchRequest: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "car == %@", car)
         fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)]
-        
+
         do {
             let allItems = try viewContext.fetch(fetchRequest)
             let weekAhead = Calendar.current.date(byAdding: .day, value: 14, to: Date())!
@@ -326,16 +364,13 @@ struct DashboardView: View {
         guard let date else { return .gray }
         let days = Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 0
         switch days {
-        case ..<0:
-            return .red // просрочено
-        case 0...2:
-            return .orange // почти срок
-        case 3...7:
-            return .yellow // скоро
-        default:
-            return .cyan // всё ок
+        case ..<0: return .red
+        case 0...2: return .orange
+        case 3...7: return .yellow
+        default: return .cyan
         }
     }
+
     private func iconForMaintenance(_ title: String) -> String {
         let lower = title.lowercased()
         if lower.contains("oil") { return "oil.drop.fill" }
@@ -346,9 +381,8 @@ struct DashboardView: View {
         if lower.contains("filter") { return "aqi.medium" }
         if lower.contains("transmission") { return "gearshape.2.fill" }
         if lower.contains("inspection") { return "wrench.and.screwdriver" }
-        return "calendar" // дефолтная иконка
+        return "calendar"
     }
-
 }
 
 #Preview {

@@ -51,3 +51,13 @@ class NotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 }
+
+// 🕵️ Проверить запланированные уведомления
+func listPending() {
+    UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+        print("🔔 Pending notifications: \(requests.count)")
+        for req in requests {
+            print("• \(req.identifier): \(req.content.title) — \(req.content.body)")
+        }
+    }
+}

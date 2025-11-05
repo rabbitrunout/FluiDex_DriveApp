@@ -8,6 +8,7 @@ class SyncService {
     
     // 📤 Отправка локальных данных в Firebase
     func syncToCloud(context: NSManagedObjectContext) {
+        // Убедись, что сущность MaintenanceItem существует в модели Core Data
         let fetchRequest: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
         do {
             let items = try context.fetch(fetchRequest)
@@ -20,44 +21,49 @@ class SyncService {
                     "title": item.title ?? "",
                     "category": item.category ?? "",
                     "intervalDays": item.intervalDays,
-                    "lastChangeDate": item.lastChangeDate ?? Date(),
-                    "nextChangeDate": item.nextChangeDate ?? Date(),
-                    "createdAt": item.lastChangeDate ?? Date()
+                    "lastChangeDate": Timestamp(date: item.lastChangeDate ?? Date()),
+                    "nextChangeDate": Timestamp(date: item.nextChangeDate ?? Date()),
+                    "createdAt": Timestamp(date: item.lastChangeDate ?? Date())
                 ], merge: true)
             }
             print("✅ Synced local data to Firebase")
         } catch {
-            print("❌ Sync error: \(error)")
+            print("❌ Sync error: \(error.localizedDescription)")
         }
     }
     
     // 📥 Загрузка данных из Firebase в Core Data
     func syncFromCloud(context: NSManagedObjectContext) {
-        db.collection("maintenance_schedules").getDocuments { snapshot, error in
+        db.collection("maintenance_schedules").getDocuments(completion: { snapshot, error in
+            if let error = error {
+                print("❌ Firestore download error: \(error.localizedDescription)")
+                return
+            }
+            
             guard let docs = snapshot?.documents else { return }
+            
             for doc in docs {
                 let data = doc.data()
                 let fetch: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
                 fetch.predicate = NSPredicate(format: "id == %@", doc.documentID)
                 
-                if let existing = try? context.fetch(fetch).first {
-                    existing.title = data["title"] as? String
-                    existing.category = data["category"] as? String
-                    existing.intervalDays = (data["intervalDays"] as? Int32) ?? 0
-                    existing.lastChangeDate = (data["lastChangeDate"] as? Timestamp)?.dateValue()
-                    existing.nextChangeDate = (data["nextChangeDate"] as? Timestamp)?.dateValue()
-                } else {
-                    let newItem = MaintenanceItem(context: context)
-                    newItem.id = UUID(uuidString: doc.documentID)
-                    newItem.title = data["title"] as? String
-                    newItem.category = data["category"] as? String
-                    newItem.intervalDays = (data["intervalDays"] as? Int32) ?? 0
-                    newItem.lastChangeDate = (data["lastChangeDate"] as? Timestamp)?.dateValue()
-                    newItem.nextChangeDate = (data["nextChangeDate"] as? Timestamp)?.dateValue()
-                }
+                let existing = try? context.fetch(fetch).first
+                let item = existing ?? MaintenanceItem(context: context)
+                
+                item.id = UUID(uuidString: doc.documentID)
+                item.title = data["title"] as? String
+                item.category = data["category"] as? String
+                item.intervalDays = (data["intervalDays"] as? Int32) ?? 0
+                item.lastChangeDate = (data["lastChangeDate"] as? Timestamp)?.dateValue()
+                item.nextChangeDate = (data["nextChangeDate"] as? Timestamp)?.dateValue()
             }
-            try? context.save()
-            print("✅ Synced cloud data to local Core Data")
-        }
+            
+            do {
+                try context.save()
+                print("✅ Synced cloud data to local Core Data")
+            } catch {
+                print("❌ Failed to save Core Data after sync: \(error.localizedDescription)")
+            }
+        })
     }
 }
