@@ -5,29 +5,37 @@ import Foundation
 struct DashboardView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    @AppStorage("currentUserName") private var currentUserName: String = "Guest"
-    @AppStorage("currentUserEmail") private var currentUserEmail: String = "user@example.com"
+    @AppStorage("userName") private var currentUserName: String = "Guest"
 
-    // 🧭 Активная машина
+    // MARK: - Animations
+    @State private var carOpacity: CGFloat = 0
+    @State private var carBreathing = false
+    @State private var glowPulse = false
+    @State private var headlightsOn = false
+
+    @State private var parallaxX: CGFloat = 0
+    @State private var parallaxY: CGFloat = 0
+    @State private var parallaxAmount: Double = 0
+
+    // MARK: - CoreData
     @FetchRequest(
         sortDescriptors: [],
         predicate: NSPredicate(format: "isSelected == true"),
         animation: .easeInOut
     ) private var selectedCar: FetchedResults<Car>
 
-    // 🔧 Все сервисные записи
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \ServiceRecord.date, ascending: false)],
         animation: .easeInOut
     ) private var allRecords: FetchedResults<ServiceRecord>
 
     @State private var showAddService = false
-    @State private var showEditProfile = false
     @State private var aiPredictions: [MaintenancePrediction] = []
 
     var body: some View {
         ZStack {
-            // 🌌 Фон
+
+            // MARK: Background
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -37,74 +45,83 @@ struct DashboardView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 28) {
-                    // 🧍 Профиль
-                    HStack(spacing: 16) {
-                        Circle()
-                            .fill(Color.cyan.opacity(0.2))
-                            .frame(width: 70, height: 70)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 35))
-                                    .foregroundColor(Color(hex: "#FFD54F"))
-                            )
-                            .shadow(color: .cyan.opacity(0.6), radius: 8, y: 4)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(currentUserName)
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.white)
-                            Text(currentUserEmail)
-                                .font(.system(size: 14))
-                                .foregroundColor(.white.opacity(0.6))
-                        }
-
-                        Spacer()
-
-                        Button {
-                            showEditProfile = true
-                        } label: {
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.system(size: 26))
-                                .foregroundColor(.cyan)
-                                .shadow(color: .cyan.opacity(0.7), radius: 8)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 30)
-
-                    Divider()
-                        .overlay(Color.cyan.opacity(0.4))
-                        .padding(.horizontal, 60)
-
-                    // 🚗 Активная машина
+                    // MARK: - Car Block
                     if let car = selectedCar.first {
-                        VStack(spacing: 12) {
-                            if let image = UIImage(named: car.imageName ?? "") {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(height: 160)
-                                    .cornerRadius(20)
-                                    .shadow(color: .cyan.opacity(0.5), radius: 20, y: 8)
-                            } else {
-                                Image(systemName: "car.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(height: 90)
-                                    .foregroundColor(.yellow)
-                                    .shadow(color: .cyan.opacity(0.8), radius: 10)
+                        ZStack {
+
+                            // 🌫 Dust glow
+                            Circle()
+                                .fill(Color.cyan.opacity(0.28))
+                                .blur(radius: 25)
+                                .frame(width: 260, height: 40)
+                                .offset(y: 90)
+                                .scaleEffect(glowPulse ? 1.12 : 0.95)
+                                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: glowPulse)
+
+                            // ✨ Dust particles
+                            ForEach(0..<14) { _ in
+                                Circle()
+                                    .fill(Color.cyan.opacity(Double.random(in: 0.1...0.22)))
+                                    .frame(width: CGFloat.random(in: 2...6),
+                                           height: CGFloat.random(in: 2...6))
+                                    .offset(
+                                        x: CGFloat.random(in: -130...130),
+                                        y: CGFloat.random(in: 80...140)
+                                    )
+                                    .blur(radius: 2)
+                                    .opacity(glowPulse ? 1 : 0.4)
+                                    .animation(
+                                        .easeInOut(duration: Double.random(in: 1.5...2.8))
+                                            .repeatForever(autoreverses: true),
+                                        value: glowPulse
+                                    )
                             }
 
-                            Text(car.name ?? "Unknown Car")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(.white)
-                                .shadow(color: .cyan.opacity(0.8), radius: 10)
+                            // 🚗 Car image
+                            Image(uiImage: UIImage(named: car.imageName ?? "") ?? UIImage())
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 185)
+                                .shadow(color: .cyan.opacity(0.7), radius: 30)
+                                .rotation3DEffect(.degrees(parallaxAmount), axis: (x: 0, y: 1, z: 0))
+                                .scaleEffect(carBreathing ? 1.02 : 0.98)
+                                .opacity(carOpacity)
+                                .offset(x: parallaxX, y: parallaxY)
+                                .modifier(ParallaxMotionModifier(amount: 12))
+                                .onAppear {
+                                    carOpacity = 0
+                                    withAnimation(.easeOut(duration: 0.8)) { carOpacity = 1 }
+                                    glowPulse = true
+                                    carBreathing = true
+                                }
 
-                            Text("\(car.year ?? "Year Unknown") • \(car.mileage) km")
-                                .foregroundColor(.white.opacity(0.7))
-                                .font(.subheadline)
+                            // 🔦 Headlights only (NO light sweep)
+                            HStack(spacing: 120) {
+                                ConeLightView()
+                                    .offset(y: 18)
+                                    .opacity(headlightsOn ? 1 : 0)
+
+                                ConeLightView()
+                                    .offset(y: 18)
+                                    .opacity(headlightsOn ? 1 : 0)
+                            }
+                            .onAppear {
+                                withAnimation(.easeInOut(duration: 2).repeatForever()) {
+                                    headlightsOn = true
+                                }
+                            }
                         }
-                        .padding(.top, 10)
+
+                        Text(car.name ?? "Unknown Car")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .cyan.opacity(0.8), radius: 12)
+
+                        Text("\(car.year ?? "Year Unknown") • \(car.mileage) km")
+                            .font(.system(size: 15))
+                            .foregroundColor(.white.opacity(0.7))
+
                     } else {
                         Text("No car selected")
                             .foregroundColor(.white.opacity(0.6))
@@ -115,7 +132,7 @@ struct DashboardView: View {
                         .overlay(Color.cyan.opacity(0.3))
                         .padding(.horizontal, 60)
 
-                    // 📊 Следующее ТО
+                    // MARK: Next service
                     if let next = getNextService(for: selectedCar.first) {
                         VStack(spacing: 10) {
                             Text("Next Service Due:")
@@ -125,166 +142,22 @@ struct DashboardView: View {
                             Text("\(next.mileage) km • \(formatDate(next.date))")
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(Color(hex: "#FFD54F"))
-                                .shadow(color: .yellow.opacity(0.5), radius: 8)
                         }
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 12)
                         .background(Color.white.opacity(0.05))
                         .cornerRadius(16)
                         .padding(.horizontal, 40)
-                        .shadow(color: .cyan.opacity(0.3), radius: 8)
                     }
 
-                    // 🧾 Последние сервисы
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Recent Services")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .padding(.leading, 20)
+                    // MARK: Recent Services
+                    recentServicesBlock
 
-                        if recentServices(for: selectedCar.first).isEmpty {
-                            Text("No service records yet.")
-                                .foregroundColor(.white.opacity(0.6))
-                                .padding(.leading, 20)
-                        } else {
-                            ForEach(recentServices(for: selectedCar.first)) { record in
-                                HStack(spacing: 16) {
-                                    Image(systemName: iconForType(record.type ?? ""))
-                                        .foregroundColor(.yellow)
-                                        .font(.system(size: 20))
-                                        .shadow(color: .yellow.opacity(0.5), radius: 5)
+                    // MARK: Maintenance Schedule
+                    scheduleLink
 
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(record.type ?? "Unknown")
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.white)
+                    // MARK: Upcoming
+                    upcomingMaintenanceBlock
 
-                                        Text("\(record.mileage) km • \(formatDate(record.date))")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
-
-                                    Spacer()
-                                }
-                                .padding()
-                                .background(Color.white.opacity(0.08))
-                                .cornerRadius(16)
-                                .shadow(color: .cyan.opacity(0.2), radius: 6)
-                                .padding(.horizontal, 20)
-                            }
-                        }
-                    }
-
-                    // 🌈 Переход к расписанию обслуживания
-                    NavigationLink(destination: MaintenanceScheduleView()) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "calendar.badge.clock")
-                                .foregroundColor(.cyan)
-                                .shadow(color: .cyan.opacity(0.6), radius: 8)
-                                .font(.title3)
-                            Text("View Maintenance Schedule")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.06))
-                        .cornerRadius(16)
-                        .shadow(color: .cyan.opacity(0.4), radius: 8)
-                        .padding(.horizontal, 40)
-                    }
-                    .padding(.top, 12)
-
-                    // 🛠 Upcoming Maintenance Section
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Upcoming Maintenance")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .padding(.leading, 20)
-                            .padding(.top, 10)
-
-                        let upcomingItems = getUpcomingMaintenance(for: selectedCar.first)
-
-                        if upcomingItems.isEmpty {
-                            Text("No upcoming maintenance tasks.")
-                                .foregroundColor(.white.opacity(0.6))
-                                .padding(.leading, 20)
-                        } else {
-                            ForEach(upcomingItems.indices, id: \.self) { index in
-                                let item = upcomingItems[index]
-
-                                HStack(spacing: 16) {
-                                    Image(systemName: iconForMaintenance(item.title ?? ""))
-                                        .font(.system(size: 22))
-                                        .foregroundColor(colorForDate(item.nextChangeDate))
-                                        .shadow(color: colorForDate(item.nextChangeDate).opacity(0.8), radius: 6)
-                                        .frame(width: 28)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(item.title ?? "Unknown Task")
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.white)
-                                        Text("Due: \(formatDate(item.nextChangeDate))")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
-                                    Spacer()
-
-                                    Image(systemName: "calendar.badge.exclamationmark")
-                                        .foregroundColor(colorForDate(item.nextChangeDate))
-                                        .shadow(color: .cyan.opacity(0.4), radius: 6)
-                                }
-                                .padding()
-                                .background(Color.white.opacity(0.06))
-                                .cornerRadius(16)
-                                .shadow(color: .cyan.opacity(0.3), radius: 8)
-                                .padding(.horizontal, 20)
-                            }
-                        }
-                    }
-                    .padding(.bottom, 10)
-
-                    // 🤖 AI Predicted Services
-                    if !aiPredictions.isEmpty {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("AI Predicted Services")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding(.leading, 20)
-                                .padding(.top, 10)
-
-                            ForEach(aiPredictions) { prediction in
-                                HStack(spacing: 16) {
-                                    Image(systemName: iconForMaintenance(prediction.type))
-                                        .foregroundColor(.cyan)
-                                        .shadow(color: .cyan.opacity(0.8), radius: 6)
-                                        .font(.system(size: 22))
-                                        .frame(width: 28)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(prediction.type)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.white)
-                                        Text("Due: \(formatDate(prediction.nextDate)) • \(prediction.nextMileage) km")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(.white.opacity(0.7))
-                                    }
-
-                                    Spacer()
-
-                                    Image(systemName: "brain.head.profile")
-                                        .foregroundColor(.cyan)
-                                        .shadow(color: .cyan.opacity(0.4), radius: 6)
-                                }
-                                .padding()
-                                .background(Color.white.opacity(0.06))
-                                .cornerRadius(16)
-                                .shadow(color: .cyan.opacity(0.3), radius: 8)
-                                .padding(.horizontal, 20)
-                            }
-                        }
-                        .padding(.bottom, 10)
-                    }
-
-                    // ➕ Добавить сервис
                     NeonButton(title: "Add Service Record") {
                         showAddService = true
                     }
@@ -293,12 +166,9 @@ struct DashboardView: View {
                             .environment(\.managedObjectContext, viewContext)
                     }
 
-                    Spacer(minLength: 60)
+                    Spacer(minLength: 50)
                 }
             }
-        }
-        .sheet(isPresented: $showEditProfile) {
-            EditProfileView(currentName: $currentUserName, currentEmail: $currentUserEmail)
         }
         .onAppear {
             if let car = selectedCar.first {
@@ -308,12 +178,115 @@ struct DashboardView: View {
         }
     }
 
+    // MARK: - Blocks
+    private var recentServicesBlock: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Recent Services")
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.leading, 20)
+
+            let items = recentServices(for: selectedCar.first)
+
+            if items.isEmpty {
+                Text("No records yet.")
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.leading, 20)
+            } else {
+                ForEach(items) { record in
+                    HStack(spacing: 16) {
+                        Image(systemName: iconForType(record.type ?? ""))
+                            .foregroundColor(.yellow)
+                            .font(.system(size: 20))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(record.type ?? "Unknown")
+                                .foregroundColor(.white)
+                                .font(.system(size: 16, weight: .semibold))
+
+                            Text("\(record.mileage) km • \(formatDate(record.date))")
+                                .foregroundColor(.white.opacity(0.7))
+                                .font(.system(size: 13))
+                        }
+
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.07))
+                    .cornerRadius(16)
+                    .padding(.horizontal, 20)
+                }
+            }
+        }
+    }
+
+    private var scheduleLink: some View {
+        NavigationLink(destination: MaintenanceScheduleView()) {
+            HStack(spacing: 12) {
+                Image(systemName: "calendar.badge.clock")
+                    .foregroundColor(.cyan)
+                    .font(.title3)
+
+                Text("Maintenance Schedule")
+                    .foregroundColor(.white)
+                    .font(.headline)
+            }
+            .padding()
+            .background(Color.white.opacity(0.06))
+            .cornerRadius(16)
+            .padding(.horizontal, 40)
+        }
+    }
+
+    private var upcomingMaintenanceBlock: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Upcoming Maintenance")
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.leading, 20)
+
+            let upcoming = getUpcomingMaintenance(for: selectedCar.first)
+
+            if upcoming.isEmpty {
+                Text("No upcoming tasks.")
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.leading, 20)
+            } else {
+                ForEach(upcoming.indices, id: \.self) { index in
+                    let item = upcoming[index]
+
+                    HStack(spacing: 16) {
+                        Image(systemName: iconForMaintenance(item.title ?? ""))
+                            .font(.system(size: 22))
+                            .foregroundColor(colorForDate(item.nextChangeDate))
+
+                        VStack(alignment: .leading) {
+                            Text(item.title ?? "Unknown")
+                                .foregroundColor(.white)
+                                .font(.system(size: 16, weight: .semibold))
+
+                            Text("Due: \(formatDate(item.nextChangeDate))")
+                                .foregroundColor(.white.opacity(0.7))
+                                .font(.system(size: 13))
+                        }
+
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(16)
+                    .padding(.horizontal, 20)
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
     private func formatDate(_ date: Date?) -> String {
-        guard let date = date else { return "N/A" }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        return formatter.string(from: date)
+        guard let date else { return "N/A" }
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        return f.string(from: date)
     }
 
     private func iconForType(_ type: String) -> String {
@@ -334,35 +307,24 @@ struct DashboardView: View {
 
     private func getNextService(for car: Car?) -> (mileage: Int32, date: Date)? {
         guard let car else { return nil }
-        guard let last = allRecords
-            .filter({ $0.car == car })
-            .sorted(by: { ($0.date ?? Date()) > ($1.date ?? Date()) })
-            .first
-        else { return nil }
-
+        guard let last = allRecords.filter({ $0.car == car }).first else { return nil }
         return (last.nextServiceKm, last.nextServiceDate ?? Date())
     }
 
     private func getUpcomingMaintenance(for car: Car?) -> [MaintenanceItem] {
         guard let car else { return [] }
 
-        let fetchRequest: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "car == %@", car)
-        fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)]
+        let req: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
+        req.predicate = NSPredicate(format: "car == %@", car)
+        req.sortDescriptors = [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)]
 
-        do {
-            let allItems = try viewContext.fetch(fetchRequest)
-            let weekAhead = Calendar.current.date(byAdding: .day, value: 14, to: Date())!
-            return allItems.filter { ($0.nextChangeDate ?? Date.distantFuture) <= weekAhead }
-        } catch {
-            print("❌ Failed to fetch maintenance items: \(error)")
-            return []
-        }
+        return (try? viewContext.fetch(req)) ?? []
     }
 
     private func colorForDate(_ date: Date?) -> Color {
         guard let date else { return .gray }
         let days = Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 0
+
         switch days {
         case ..<0: return .red
         case 0...2: return .orange
@@ -372,18 +334,41 @@ struct DashboardView: View {
     }
 
     private func iconForMaintenance(_ title: String) -> String {
-        let lower = title.lowercased()
-        if lower.contains("oil") { return "oil.drop.fill" }
-        if lower.contains("brake") { return "car.rear.waves.up" }
-        if lower.contains("battery") { return "bolt.car.fill" }
-        if lower.contains("tire") { return "circle.grid.cross" }
-        if lower.contains("coolant") || lower.contains("fluid") { return "thermometer.snowflake" }
-        if lower.contains("filter") { return "aqi.medium" }
-        if lower.contains("transmission") { return "gearshape.2.fill" }
-        if lower.contains("inspection") { return "wrench.and.screwdriver" }
+        let t = title.lowercased()
+
+        if t.contains("oil") { return "oil.drop.fill" }
+        if t.contains("brake") { return "car.rear.waves.up" }
+        if t.contains("battery") { return "bolt.car.fill" }
+        if t.contains("tire") { return "circle.grid.cross" }
+        if t.contains("fluid") { return "thermometer.snowflake" }
+        if t.contains("filter") { return "aqi.medium" }
+        if t.contains("transmission") { return "gearshape.2.fill" }
+        if t.contains("inspection") { return "wrench.and.screwdriver" }
+
         return "calendar"
     }
 }
+
+// MARK: - Cone Light
+struct ConeLightView: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 50)
+                .fill(Color.cyan.opacity(0.25))
+                .blur(radius: 25)
+                .frame(width: 60, height: 140)
+
+            RoundedRectangle(cornerRadius: 50)
+                .fill(Color.cyan.opacity(0.45))
+                .blur(radius: 10)
+                .frame(width: 40, height: 120)
+        }
+        .rotationEffect(.degrees(-6))
+        .blendMode(.screen)
+    }
+}
+
+
 
 #Preview {
     DashboardView()

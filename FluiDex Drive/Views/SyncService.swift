@@ -8,29 +8,37 @@ class SyncService {
     
     // 📤 Отправка локальных данных в Firebase
     func syncToCloud(context: NSManagedObjectContext) {
-        // Убедись, что сущность MaintenanceItem существует в модели Core Data
         let fetchRequest: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
+        
         do {
             let items = try context.fetch(fetchRequest)
+            
             for item in items {
                 guard let id = item.id?.uuidString else { continue }
                 
+                // ✅ Отправляем данные в Firebase
                 db.collection("maintenance_schedules").document(id).setData([
                     "id": id,
-                    "userId": "demo_user@example.com",
                     "title": item.title ?? "",
                     "category": item.category ?? "",
                     "intervalDays": item.intervalDays,
-                    "lastChangeDate": Timestamp(date: item.lastChangeDate ?? Date()),
-                    "nextChangeDate": Timestamp(date: item.nextChangeDate ?? Date()),
-                    "createdAt": Timestamp(date: item.lastChangeDate ?? Date())
-                ], merge: true)
+                    "lastChangeDate": item.lastChangeDate ?? Date(),
+                    "nextChangeDate": item.nextChangeDate ?? Date(),
+                    "createdAt": FieldValue.serverTimestamp()
+                ], merge: true) { error in
+                    if let error = error {
+                        print("❌ Firestore upload error: \(error.localizedDescription)")
+                    } else {
+                        print("✅ Uploaded \(item.title ?? "Unnamed") to Firebase")
+                    }
+                }
             }
-            print("✅ Synced local data to Firebase")
+            
         } catch {
             print("❌ Sync error: \(error.localizedDescription)")
         }
     }
+    
     
     // 📥 Загрузка данных из Firebase в Core Data
     func syncFromCloud(context: NSManagedObjectContext) {

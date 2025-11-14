@@ -3,13 +3,12 @@ import SwiftUI
 struct MainTabView: View {
     @Binding var selectedTab: Int
     @Binding var isLoggedIn: Bool
+    @StateObject private var tabBar = TabBarVisibility() // ✅ добавлено
 
-    // 👤 Имя текущего пользователя
     @AppStorage("userName") private var userName: String = "Driver"
 
     var body: some View {
         ZStack {
-            // 🌌 Фон
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -18,30 +17,31 @@ struct MainTabView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // 🟣 Приветствие
-                VStack(spacing: 6) {
-                    Text("👋 Hi, \(userName)")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(Color(hex: "#FFD54F"))
-                        .shadow(color: .yellow.opacity(0.7), radius: 10, y: 4)
+                // Приветствие
+                if tabBar.isVisible { // 👈 теперь панель и заголовок скрываются
+                    VStack(spacing: 6) {
+                        Text("👋 Hi, \(userName)")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(Color(hex: "#FFD54F"))
+                            .shadow(color: .yellow.opacity(0.7), radius: 10, y: 4)
 
-                    Text("Welcome back to your dashboard")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
-                        .shadow(color: .cyan.opacity(0.6), radius: 8)
-                }
-                .padding(.top, 50)
-                .padding(.bottom, 25)
-                .frame(maxWidth: .infinity)
-                .background(
-                    LinearGradient(
-                        colors: [Color.cyan.opacity(0.15), .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
+                        Text("Welcome back to your dashboard")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                            .shadow(color: .cyan.opacity(0.6), radius: 8)
+                    }
+                    .padding(.top, 50)
+                    .padding(.bottom, 25)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        LinearGradient(colors: [Color.cyan.opacity(0.15), .clear],
+                                       startPoint: .top,
+                                       endPoint: .bottom)
                     )
-                )
+                    .transition(.opacity)
+                }
 
-                // 🔹 Контент вкладок
+                // Контент вкладок
                 TabView(selection: $selectedTab) {
                     DashboardView()
                         .tabItem {
@@ -55,21 +55,22 @@ struct MainTabView: View {
                         }
                         .tag(1)
 
-                    ProfileView(isLoggedIn: $isLoggedIn) // ✅ передали нужный binding
+                    OBDLiveDataView()
+                        .tabItem {
+                            Label("OBD", systemImage: "antenna.radiowaves.left.and.right")
+                        }
+                        .tag(2)
+
+                    ProfileView(isLoggedIn: $isLoggedIn)
                         .tabItem {
                             Label("Profile", systemImage: "person.crop.circle")
                         }
-                        .tag(2)
+                        .tag(3)
                 }
-
                 .accentColor(Color(hex: "#FFD54F"))
             }
-            OBDLiveDataView()
-                .tabItem {
-                    Label("OBD", systemImage: "antenna.radiowaves.left.and.right")
-                }
-
         }
+        .environmentObject(tabBar) // ✅ передано вниз во все экраны
     }
 }
 

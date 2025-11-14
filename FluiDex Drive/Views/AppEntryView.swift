@@ -8,19 +8,20 @@ struct AppEntryView: View {
 
     var body: some View {
         Group {
-            if isLoggedIn {
-                if hasSelectedCar {
-                    MainTabView(selectedTab: $selectedTab, isLoggedIn: $isLoggedIn)
-                } else {
-                    CarSelectionView(hasSelectedCar: $hasSelectedCar)
-                }
-            } else {
+            if !isLoggedIn {
+                // 🔐 Пользователь не вошёл → экран входа
                 ContentView()
+            } else if !hasSelectedCar {
+                // 🚗 Вошёл, но не выбрал машину
+                CarSelectionView(hasSelectedCar: $hasSelectedCar)
+            } else {
+                // 🏠 Всё готово → главный таббар
+                MainTabView(selectedTab: $selectedTab, isLoggedIn: $isLoggedIn)
             }
         }
-        // ✅ Новый синтаксис onChange
-        .onChange(of: isLoggedIn) { oldValue, newValue in
+        .onChange(of: isLoggedIn) { old, newValue in
             if !newValue {
+                // 🔄 Когда выходим — сбрасываем машину
                 hasSelectedCar = false
                 selectedTab = 0
             }
