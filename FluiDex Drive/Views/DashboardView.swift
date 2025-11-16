@@ -127,6 +127,10 @@ struct DashboardView: View {
                             .foregroundColor(.white.opacity(0.6))
                             .padding(.top, 40)
                     }
+                    
+                    TripHUDView()
+                        .padding(.horizontal, 20)
+
 
                     Divider()
                         .overlay(Color.cyan.opacity(0.3))

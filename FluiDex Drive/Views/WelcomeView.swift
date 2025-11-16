@@ -19,7 +19,7 @@ struct WelcomeView: View {
                 Spacer()
 
                 // 🚙 Изображение автомобиля
-                Image("JeepCompass") // добавь в Assets картинку из макета
+                Image("Jeep Compass") // добавь в Assets картинку из макета
                     .resizable()
                     .scaledToFit()
                     .frame(width: 240, height: 160)
