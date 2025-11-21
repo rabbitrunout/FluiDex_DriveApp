@@ -114,7 +114,7 @@ Never miss important maintenance:
 
 ---
 
-## 🧱 Architecture Overview
+## 🧱 8.  Architecture Overview
 
 The project uses a **feature-first modular architecture**, designed to scale:
 
@@ -148,7 +148,7 @@ Architecture style:
 
 ---
 
-## 🗄 Core Data Model (Summary)
+## 🗄 9. Core Data Model (Summary)
 
 ### User
 - id, name, email, password (demo), createdAt  
@@ -170,7 +170,7 @@ Additional: Fluid, MaintenanceItem, ServiceRule
 
 ---
 
-## 🛠 Tech Stack
+## 🛠 10. Tech Stack
 
 - **Swift**, **SwiftUI**  
 - **MVVM / feature-first architecture**  
