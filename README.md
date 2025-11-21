@@ -139,123 +139,70 @@ FluiDex_Drive/
 └── Assets/
 ```
 
-Architecture style
 
-SwiftUI + ViewModel
+Architecture style:
+- **SwiftUI + ViewModel**
+- **Core Data** for local persistence  
+- **Managers layer** for business logic  
+- Partial **Firebase Sync** layer  
 
-Core Data for local persistence
+---
 
-Dedicated Managers layer for business logic
+## 🗄 Core Data Model (Summary)
 
-Partial Firebase Sync integration
+### User
+- id, name, email, password (demo), createdAt  
+- relationships: cars, services  
 
-🗄 Data Model (Core Data)
+### Car
+- id, name, brand, model, year, vin, fuelType, mileage, isSelected  
+- relationships: owner, records, trips, fluids, maintenanceItems, rules  
 
-FluiDex Drive uses Core Data with a relational model optimized for multi-user & multi-car scenarios.
+### ServiceRecord
+- id, date, mileage, type, costs, nextServiceDate/Km, receiptImageData  
+- relationships: car, user  
 
-👤 User
+### Trip
+- id, date, distance  
+- relationship: car  
 
-id: UUID
+Additional: Fluid, MaintenanceItem, ServiceRule  
 
-name: String
+---
 
-email: String
+## 🛠 Tech Stack
 
-password: String (demo only)
+- **Swift**, **SwiftUI**  
+- **MVVM / feature-first architecture**  
+- **Core Data**  
+- **Firebase** (Auth/Sync — partial)  
+- **Bluetooth / OBD (work in progress)**  
+- **Local Notifications**  
+- Custom animations & UI components  
 
-createdAt: Date
+---
 
-Relationships:
+## 🚀 Getting Started
 
-cars (to-many Car)
+1. Clone the repository  
+2. Open the project in Xcode  
+3. (Optional) add your `GoogleService-Info.plist` for Firebase  
+4. Run the app on a simulator or device  
 
-services (to-many ServiceRecord)
+---
 
-🚗 Car
+## 🗺 Roadmap
 
-id: UUID
+- Full Firebase sync  
+- Real OBD-II adapter support  
+- Advanced trip analytics  
+- Theme engine / dark mode  
+- PDF/CSV export  
+- Improved AI maintenance engine  
 
-name, brand, model, year, vin, fuelType
+---
 
-mileage: Int32
-
-isSelected: Bool
-
-Relationships:
-
-owner (to-one User)
-
-records (to-many ServiceRecord)
-
-trips (to-many Trip)
-
-fluids (to-many Fluid)
-
-maintenanceItems (to-many MaintenanceItem)
-
-rules (to-many ServiceRule)
-
-🧾 ServiceRecord
-
-id: UUID
-
-date: Date
-
-mileage: Int32
-
-type: String
-
-note: String
-
-costLabor: Double
-
-costParts: Double
-
-totalCost: Double
-
-nextServiceDate: Date
-
-nextServiceKm: Int32
-
-receiptImageData: Binary Data
-
-Relationships:
-
-car (to-one Car)
-
-user (to-one User)
-
-📍 Trip
-
-id: UUID
-
-date: Date
-
-distance: Double
-
-Relationship:
-
-car (to-one Car)
-
-Additional entities: Fluid, MaintenanceItem, ServiceRule.
-
-🛠 Tech Stack
-
-Language: Swift
-
-UI: SwiftUI
-
-Architecture: Feature-first, MVVM-style, managers/service layer
-
-Persistence: Core Data
-
-Cloud / Backend: Firebase (GoogleService-Info.plist)
-
-System APIs: UserNotifications, Bluetooth (WIP)
-
-Other: Custom animations, sound effects
-
-📸 Screenshots
+## 📸 Screenshots
 
 Coming soon – UI is under active development.
 
@@ -263,35 +210,13 @@ Coming soon – UI is under active development.
 |----------|-------------|---------------|-----------|
 | ![](Docs/dashboard.png) | ![](Docs/service-log.png) | ![](Docs/trip.png) | ![](Docs/car-setup.png) |
 
-🚀 Getting Started
-Requirements
-
-macOS with Xcode 15+
-
-Swift 5.9+
-
-iOS 16+ deployment target
-
-🗺 Roadmap
-
- Full Firebase sync for users, cars & services
-
- Real OBD-II adapter support
-
- Advanced trip analytics (speed, duration, fuel estimation)
-
- Theme engine & dark mode polish
-
- Export service history to PDF/CSV
-
- Smarter AI-based maintenance suggestions
 
  🤝 Contributing
 
 This is a portfolio / learning project.
 Suggestions, ideas, or code reviews are always welcome via GitHub issues or pull requests.
 
-👩‍💻 Author
+## 👩‍💻 Author
 
 Irina S. – Junior Mobile & Web Developer
 Focus: Swift, SwiftUI, Firebase, Core Data
