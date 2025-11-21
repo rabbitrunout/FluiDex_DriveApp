@@ -153,7 +153,7 @@ Additional: Fluid, MaintenanceItem, ServiceRule
 ---
 
 ## 👩‍💻 Author  
-**Irina S.**  
+**Irina Safronova**  
 Junior Mobile & Web Developer  
 Swift • SwiftUI • Firebase • Core Data  
 
