@@ -148,25 +148,31 @@ Architecture style:
 
 ---
 
-## 🗄 9. Core Data Model (Summary)
+## 🗄 Core Data Model
 
 ### User
-- id, name, email, password (demo), createdAt  
-- relationships: cars, services  
+| Attributes | Relationships |
+|-----------|---------------|
+| id, name, email, password, createdAt | cars (to-many), services (to-many) |
 
 ### Car
-- id, name, brand, model, year, vin, fuelType, mileage, isSelected  
-- relationships: owner, records, trips, fluids, maintenanceItems, rules  
+| Attributes | Relationships |
+|-----------|---------------|
+| id, name, brand, model, year, vin, fuelType, mileage, isSelected | owner (to-one), records, trips, fluids, items, rules |
 
 ### ServiceRecord
-- id, date, mileage, type, costs, nextServiceDate/Km, receiptImageData  
-- relationships: car, user  
+| Attributes | Relationships |
+|-----------|---------------|
+| id, date, mileage, type, costs, nextServiceDate/Km, receiptImageData | car (to-one), user (to-one) |
 
 ### Trip
-- id, date, distance  
-- relationship: car  
+| Attributes | Relationships |
+|-----------|---------------|
+| id, date, distance | car (to-one) |
 
-Additional: Fluid, MaintenanceItem, ServiceRule  
+### Additional  
+Fluid, MaintenanceItem, ServiceRule
+
 
 ---
 
