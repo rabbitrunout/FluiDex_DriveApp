@@ -73,10 +73,14 @@ FluiDex_Drive/
 
 ├── App/
 │      (app entry, root navigation, persistence)
+
 ├── Features/
 │      (screens grouped by modules)
+
 │   ├── Authentication/
+
 │   ├── CarSetup/
+
 │   ├── Dashboard/
 │   ├── Maintenance/
 │   ├── TripTracking/
