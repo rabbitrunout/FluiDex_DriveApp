@@ -217,7 +217,7 @@ This is a portfolio / learning project.
 Suggestions, ideas, or code reviews are always welcome via GitHub issues or pull requests.
 
 ## 👩‍💻 Author  
-**Irina S.**  
+**Irina Safronova**  
 Junior Mobile & Web Developer  
 Swift • SwiftUI • Firebase • Core Data 
 
