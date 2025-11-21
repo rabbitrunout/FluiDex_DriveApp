@@ -70,6 +70,7 @@ The app helps drivers:
 The project uses a **feature-first modular architecture**, designed to scale:
 
 FluiDex_Drive/
+
 ├── App/
 │      (app entry, root navigation, persistence)
 ├── Features/
