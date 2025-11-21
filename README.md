@@ -70,23 +70,24 @@ The app helps drivers:
 The project uses a **feature-first modular architecture**, designed to scale:
 
 FluiDex_Drive/
-├── App/ # App entry, root navigation, persistence
-├── Features/ # Screens grouped by modules
-│ ├── Authentication/
-│ ├── CarSetup/
-│ ├── Dashboard/
-│ ├── Maintenance/
-│ ├── TripTracking/
-│ ├── Profile/
-│ ├── Notifications/
-│ ├── Onboarding/
-│ └── Bluetooth/
-├── Managers/ # Services, logic controllers, coordinators
-├── Models/ # Data models, abstractions
-├── UIComponents/ # Shared SwiftUI components
+├── App/                # App entry, root navigation, persistence
+├── Features/           # Screens grouped by modules
+│   ├── Authentication/
+│   ├── CarSetup/
+│   ├── Dashboard/
+│   ├── Maintenance/
+│   ├── TripTracking/
+│   ├── Profile/
+│   ├── Notifications/
+│   ├── Onboarding/
+│   └── Bluetooth/
+├── Managers/           # Services, controllers
+├── Models/             # Data models, abstractions
+├── UIComponents/       # Shared SwiftUI components
 ├── Sounds/
-├── FluiDex_Drive/ # Core Data model
+├── FluiDex_Drive/      # Core Data model (.xcdatamodeld)
 └── Assets/
+
 
 
 Architecture style:
