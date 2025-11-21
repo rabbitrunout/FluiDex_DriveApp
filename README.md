@@ -1,77 +1,160 @@
-# 🚗 FluiDex Drive  
+# FluiDex Drive 🚗📱  
+Smart vehicle maintenance & trip tracking app
 
-**FluiDex Drive — a smart mobile tracker for vehicle maintenance**  
-
----
-
-## 📖 Introduction  
-
-Many new car owners struggle with basic vehicle maintenance:  
-- When to change the oil?  
-- Which fluids are required?  
-- How to keep track of past services?  
-
-Missing these tasks often leads to costly repairs and unnecessary stress.  
-
-**FluiDex Drive** solves this problem by acting as a **digital assistant for beginners**:  
-✅ Explains in simple terms what needs to be done and when  
-✅ Sends smart reminders  
-✅ Helps drivers feel confident about keeping their car in good shape  
+**FluiDex Drive** is an iOS app built with SwiftUI that helps drivers track car condition, service history, mileage, trips, and upcoming maintenance.  
+Designed as a portfolio & capstone project by **Irina S.**
 
 ---
 
-## ⚙️ Core Functionality  
+## ✨ Overview
 
-### 🔔 1. Smart Reminders  
-- 📅 Hybrid reminders (time + mileage)  
-- 🔄 Auto-recalculation after each service entry  
-- 🛠️ Calendar integration  
-- 📍 Geo-based alerts: *“You’re near a service shop and an oil change is due in 300 km”*  
+FluiDex Drive works like a digital health journal for your car.  
+The app helps drivers:
 
-### 📊 2. Service Log & Analytics  
-- 💵 Expense tracking (parts, labor, fluids) with charts  
-- 📈 Average maintenance cost per 1,000 km  
-- 🔍 Detailed service history with receipt photos  
-- 📑 Export reports (PDF/CSV)  
-
-### 📱 3. User Experience for Beginners  
-- 📸 Receipt/QR scan → auto-filled service details  
-- 🎙️ Voice input: *“Changed oil at 85,200 km”*  
-- 🖼️ Visual dashboard with progress bars and indicators  
-- 🌗 Modern UI: dark/neon themes & widgets  
-- 📖 Built-in guides with simple explanations  
-
-### 🔌 4. Car & Device Integration  
-- 🔧 OBD-II via Bluetooth (mileage + error codes)  
-- 🛰️ GPS-based mileage tracking  
-- ⛽ Fuel API → refueling cost tracking  
-
-### 🌍 5. Sync & Extensions  
-- ☁️ Cloud sync with family sharing  
-- 🚘 Multi-vehicle management  
-- 🛡️ Automatic service history backups  
-- 📎 Attach photos & scanned documents  
-
-### 🤖 6. AI-Powered Features  
-- 🔮 Expense forecasting & interval predictions  
-- 🛑 Smart alerts: *“You’ve driven 9,500 km, schedule your oil change soon”*  
-- 🗣️ Chat assistant with beginner-friendly explanations  
-
-### 🏆 7. Portfolio Differentiators  
-- ✨ Modern UI (SwiftUI/Compose) with animations & charts  
-- ⚡ CI/CD pipeline (GitHub Actions, unit/UI tests, linters)  
-- 📹 Demo video & design system  
-- 🏗️ Clean MVVM + Use Case architecture → interview ready  
+- remember **when to change oil, fluids, filters, tires**  
+- view a full **service history** with costs and mileage  
+- track **trips and distance** for smarter maintenance  
+- get **smart reminders** based on date or odometer  
+- store **multiple cars** and receipts in one place  
 
 ---
 
-## 🛠️ Installation & Run  
+## 🌟 Key Features
 
-### Prerequisites  
-- macOS (latest version)  
-- [Mockup](https://xd.adobe.com/view/7dc72984-cdac-4c01-83ea-2575e9d4d903-2894/)
- 15+  
-- Swift 5.9+  
-- Git (configured with your GitHub account)  
+### 👤 Authentication & Profiles
+- Email-based sign up & login  
+- Each user can manage multiple cars  
 
+### 🚗 Car Management
+- Add cars with brand, model, year, VIN, fuel type, mileage, image  
+- Select an active car for dashboard and tracking  
+
+### 🛠 Smart Maintenance & Service Log
+- Create service records:
+  - date, mileage  
+  - service type  
+  - parts & labor cost  
+  - next service date / mileage  
+  - receipt photo  
+- View complete service history  
+- Rule-based and AI-assisted maintenance suggestions  
+
+### 📍 Trip Tracking
+- Log trips with date and distance  
+- Use trip data to predict upcoming maintenance  
+- Trip Tracking screen + trip HUD  
+
+### 🔔 Notifications
+- Local reminders for upcoming maintenance  
+- Date-based and mileage-based alerts  
+
+### 🔌 Connectivity (in progress)
+- Bluetooth connection UI  
+- OBD-II live data preview  
+
+### 🧩 UI & Experience
+- Fully SwiftUI interface  
+- Custom animations  
+- Welcome / onboarding flow  
+- Reusable UI components:
+  - cards  
+  - progress indicators  
+  - banners  
+  - overlays  
+- Sound effects for user actions  
+
+---
+
+## 🧱 Architecture
+
+The project uses a **feature-first modular architecture**, designed to scale:
+
+FluiDex_Drive/
+├── App/ # App entry, root navigation, persistence
+├── Features/ # Screens grouped by modules
+│ ├── Authentication/
+│ ├── CarSetup/
+│ ├── Dashboard/
+│ ├── Maintenance/
+│ ├── TripTracking/
+│ ├── Profile/
+│ ├── Notifications/
+│ ├── Onboarding/
+│ └── Bluetooth/
+├── Managers/ # Services, logic controllers, coordinators
+├── Models/ # Data models, abstractions
+├── UIComponents/ # Shared SwiftUI components
+├── Sounds/
+├── FluiDex_Drive/ # Core Data model
+└── Assets/
+
+
+Architecture style:
+- **SwiftUI + ViewModel**
+- **Core Data** for local persistence  
+- **Managers layer** for business logic  
+- Partial **Firebase Sync** layer  
+
+---
+
+## 🗄 Core Data Model (Summary)
+
+### User
+- id, name, email, password (demo), createdAt  
+- relationships: cars, services  
+
+### Car
+- id, name, brand, model, year, vin, fuelType, mileage, isSelected  
+- relationships: owner, records, trips, fluids, maintenanceItems, rules  
+
+### ServiceRecord
+- id, date, mileage, type, costs, nextServiceDate/Km, receiptImageData  
+- relationships: car, user  
+
+### Trip
+- id, date, distance  
+- relationship: car  
+
+Additional: Fluid, MaintenanceItem, ServiceRule  
+
+---
+
+## 🛠 Tech Stack
+
+- **Swift**, **SwiftUI**  
+- **MVVM / feature-first architecture**  
+- **Core Data**  
+- **Firebase** (Auth/Sync — partial)  
+- **Bluetooth / OBD (work in progress)**  
+- **Local Notifications**  
+- Custom animations & UI components  
+
+---
+
+## 🚀 Getting Started
+
+1. Clone the repository  
+2. Open the project in Xcode  
+3. (Optional) add your `GoogleService-Info.plist` for Firebase  
+4. Run the app on a simulator or device  
+
+---
+
+## 🗺 Roadmap
+
+- Full Firebase sync  
+- Real OBD-II adapter support  
+- Advanced trip analytics  
+- Theme engine / dark mode  
+- PDF/CSV export  
+- Improved AI maintenance engine  
+
+---
+
+## 👩‍💻 Author  
+**Irina S.**  
+Junior Mobile & Web Developer  
+Swift • SwiftUI • Firebase • Core Data  
+
+---
 
