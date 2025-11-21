@@ -216,9 +216,9 @@ Coming soon – UI is under active development.
 This is a portfolio / learning project.
 Suggestions, ideas, or code reviews are always welcome via GitHub issues or pull requests.
 
-## 👩‍💻 Author
-
-Irina S. – Junior Mobile & Web Developer
-Focus: Swift, SwiftUI, Firebase, Core Data
+## 👩‍💻 Author  
+**Irina S.**  
+Junior Mobile & Web Developer  
+Swift • SwiftUI • Firebase • Core Data 
 
 Feel free to explore the code, open issues, or reach out with feedback.
