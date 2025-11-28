@@ -19,9 +19,9 @@ struct AppEntryView: View {
                 MainTabView(selectedTab: $selectedTab, isLoggedIn: $isLoggedIn)
             }
         }
-        .onChange(of: isLoggedIn) { old, newValue in
+        .onChange(of: isLoggedIn) { newValue in     // 👍 iOS 17+ формат
             if !newValue {
-                // 🔄 Когда выходим — сбрасываем машину
+                // 🔄 Когда выходим — сбрасываем состояние
                 hasSelectedCar = false
                 selectedTab = 0
             }

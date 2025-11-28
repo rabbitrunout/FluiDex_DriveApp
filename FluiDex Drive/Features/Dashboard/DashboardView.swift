@@ -183,6 +183,7 @@ struct DashboardView: View {
     }
 
     // MARK: - Blocks
+    // MARK: - Recent Services
     private var recentServicesBlock: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Recent Services")
@@ -198,49 +199,87 @@ struct DashboardView: View {
                     .padding(.leading, 20)
             } else {
                 ForEach(items) { record in
-                    HStack(spacing: 16) {
-                        Image(systemName: iconForType(record.type ?? ""))
-                            .foregroundColor(.yellow)
-                            .font(.system(size: 20))
+                    Button {
+                        // позже можно открыть ServiceDetailView(record: record)
+                        print("Tapped record: \(record.type ?? "") at \(record.mileage) km")
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: iconForType(record.type ?? ""))
+                                .foregroundColor(.yellow)
+                                .font(.system(size: 20))
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(record.type ?? "Unknown")
-                                .foregroundColor(.white)
-                                .font(.system(size: 16, weight: .semibold))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(record.type ?? "Unknown")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 16, weight: .semibold))
 
-                            Text("\(record.mileage) km • \(formatDate(record.date))")
-                                .foregroundColor(.white.opacity(0.7))
-                                .font(.system(size: 13))
+                                Text("\(record.mileage) km • \(formatDate(record.date))")
+                                    .foregroundColor(.white.opacity(0.7))
+                                    .font(.system(size: 13))
+                            }
+
+                            Spacer()
                         }
-
-                        Spacer()
+                        .padding()
+                        .background(Color.white.opacity(0.07))
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.cyan.opacity(0.25), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 20)
                     }
-                    .padding()
-                    .background(Color.white.opacity(0.07))
-                    .cornerRadius(16)
-                    .padding(.horizontal, 20)
+                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    private var scheduleLink: some View {
-        NavigationLink(destination: MaintenanceScheduleView()) {
-            HStack(spacing: 12) {
-                Image(systemName: "calendar.badge.clock")
-                    .foregroundColor(.cyan)
-                    .font(.title3)
 
-                Text("Maintenance Schedule")
-                    .foregroundColor(.white)
-                    .font(.headline)
+
+    // MARK: - Maintenance Schedule
+    private var scheduleLink: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Maintenance Schedule")
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.leading, 20)
+
+            NavigationLink(destination: MaintenanceScheduleView()) {
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.clock")
+                        .foregroundColor(.cyan)
+                        .font(.title3)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("View full schedule")
+                            .foregroundColor(.white)
+                            .font(.system(size: 16, weight: .semibold))
+
+                        Text("Recommended upcoming maintenance")
+                            .foregroundColor(.white.opacity(0.7))
+                            .font(.caption)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.white.opacity(0.7))
+                        .font(.subheadline)
+                }
+                .padding()
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
+                )
+                .padding(.horizontal, 40)
             }
-            .padding()
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(16)
-            .padding(.horizontal, 40)
         }
     }
+
+
 
     private var upcomingMaintenanceBlock: some View {
         VStack(alignment: .leading, spacing: 14) {

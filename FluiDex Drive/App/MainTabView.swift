@@ -43,11 +43,13 @@ struct MainTabView: View {
 
                 // Контент вкладок
                 TabView(selection: $selectedTab) {
-                    DashboardView()
-                        .tabItem {
-                            Label("Dashboard", systemImage: "speedometer")
-                        }
-                        .tag(0)
+                    NavigationStack {
+                        DashboardView()
+                    }
+                    .tabItem {
+                        Label("Dashboard", systemImage: "speedometer")
+                    }
+                    .tag(0)
 
                     AddServiceView()
                         .tabItem {
@@ -67,6 +69,8 @@ struct MainTabView: View {
                         }
                         .tag(3)
                 }
+
+
                 .accentColor(Color(hex: "#FFD54F"))
             }
         }

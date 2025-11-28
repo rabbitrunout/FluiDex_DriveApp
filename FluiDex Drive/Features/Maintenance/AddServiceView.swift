@@ -189,7 +189,8 @@ struct AddServiceView: View {
 
         do {
             try viewContext.save()
-            FirebaseSyncManager(context: viewContext).syncServiceRecord(newRecord)
+            FirebaseSyncManager.shared.syncServiceRecord(newRecord)
+
 
             dismiss()
         } catch {

@@ -1,8 +1,7 @@
 import SwiftUI
 import CoreBluetooth
 import AVFoundation
-import Combine   // ✅ Добавь эту строчку
-
+import Combine
 
 struct BluetoothConnectView: View {
     @StateObject private var manager = BluetoothManager()
@@ -11,7 +10,7 @@ struct BluetoothConnectView: View {
     @State private var radarGlow = false
     @State private var rotationSpeed: Double = 2.0
     @State private var lastDeviceCount = 0
-    
+
     var body: some View {
         ZStack {
             // 🌌 FluiDex Drive фон
@@ -21,7 +20,7 @@ struct BluetoothConnectView: View {
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
-            
+
             VStack(spacing: 30) {
                 // 💫 Заголовок
                 Text("Vehicle Bluetooth")
@@ -29,9 +28,9 @@ struct BluetoothConnectView: View {
                     .foregroundColor(.white)
                     .glow(color: .cyan, radius: 14)
                     .padding(.top, 10)
-                
-                // 🌀 Неоновый HUD-радар
-                if manager.connectedPeripheral == nil {
+
+                // 🌀 Неоновый HUD-радар — показываем, если НЕ подключены ни реальное, ни демо-устройство
+                if manager.connectedPeripheral == nil && manager.connectedDemoDevice == nil {
                     ZStack {
                         // Пульсирующие кольца
                         ForEach(0..<3) { i in
@@ -47,12 +46,12 @@ struct BluetoothConnectView: View {
                                 .scaleEffect(pulse ? 1.3 : 0.9)
                                 .animation(
                                     .easeInOut(duration: 2)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.5),
+                                        .repeatForever(autoreverses: true)
+                                        .delay(Double(i) * 0.5),
                                     value: pulse
                                 )
                         }
-                        
+
                         // Вращающийся сектор радара
                         Circle()
                             .trim(from: 0, to: 0.15)
@@ -72,7 +71,7 @@ struct BluetoothConnectView: View {
                                         rotation = 360
                                     }
                             }
-                        
+
                         // Центральная иконка машины
                         Image(systemName: "car.fill")
                             .font(.system(size: 44))
@@ -83,16 +82,16 @@ struct BluetoothConnectView: View {
                     }
                     .frame(height: 250)
                     .onAppear { pulse = true }
-                    
+
                     // ✨ Надпись “Scanning...”
-                    Text("Scanning for devices…")
+                    Text(manager.isDemoMode ? "Demo mode — virtual devices" : "Scanning for devices…")
                         .font(.headline)
                         .foregroundColor(.cyan)
                         .opacity(pulse ? 1 : 0.3)
                         .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: pulse)
                         .padding(.top, -10)
                 }
-                
+
                 // 🟢 Bluetooth статус
                 Text(manager.status)
                     .font(.system(size: 18, weight: .semibold))
@@ -116,67 +115,123 @@ struct BluetoothConnectView: View {
                     .cornerRadius(20)
                     .shadow(color: .cyan.opacity(0.4), radius: 10)
                     .animation(.easeInOut, value: manager.status)
-                
+
                 // 📡 Список устройств
                 ScrollView {
                     VStack(spacing: 16) {
-                        ForEach(manager.peripherals, id: \.identifier) { device in
-                            Button {
-                                manager.connect(to: device)
-                            } label: {
-                                HStack(spacing: 15) {
-                                    Image(systemName: "antenna.radiowaves.left.and.right")
-                                        .foregroundColor(.cyan)
-                                        .shadow(color: .cyan.opacity(0.8), radius: 6)
-                                        .font(.title3)
-                                    
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(device.name ?? "Unknown Device")
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                        Text(manager.connectedPeripheral?.identifier == device.identifier
-                                             ? "Connected"
-                                             : "Tap to connect")
-                                            .font(.caption)
-                                            .foregroundColor(manager.connectedPeripheral?.identifier == device.identifier ? .green : .gray)
+
+                        if manager.isDemoMode {
+                            // 👾 DEMO-устройства
+                            ForEach(manager.demoDevices) { device in
+                                Button {
+                                    manager.connectDemo(to: device)
+                                } label: {
+                                    HStack(spacing: 15) {
+                                        Image(systemName: "antenna.radiowaves.left.and.right")
+                                            .foregroundColor(.cyan)
+                                            .shadow(color: .cyan.opacity(0.8), radius: 6)
+                                            .font(.title3)
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(device.name)
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                            Text(manager.connectedDemoDevice == device
+                                                 ? "Connected (demo)"
+                                                 : device.subtitle)
+                                                .font(.caption)
+                                                .foregroundColor(manager.connectedDemoDevice == device ? .green : .gray)
+                                        }
+
+                                        Spacer()
+
+                                        if manager.connectedDemoDevice == device {
+                                            Circle()
+                                                .fill(.green)
+                                                .frame(width: 10, height: 10)
+                                                .shadow(color: .green.opacity(0.7), radius: 6)
+                                        }
                                     }
-                                    
-                                    Spacer()
-                                    
-                                    if manager.connectedPeripheral?.identifier == device.identifier {
-                                        Circle()
-                                            .fill(.green)
-                                            .frame(width: 10, height: 10)
-                                            .shadow(color: .green.opacity(0.7), radius: 6)
-                                    }
+                                    .padding()
+                                    .background(Color.white.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [.cyan.opacity(0.6), .blue.opacity(0.5)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 1.4
+                                            )
+                                    )
+                                    .cornerRadius(16)
+                                    .shadow(color: .cyan.opacity(0.3), radius: 8)
+                                    .glow(color: manager.connectedDemoDevice == device ? .green : .cyan, radius: 5)
                                 }
-                                .padding()
-                                .background(Color.white.opacity(0.05))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [.cyan.opacity(0.6), .blue.opacity(0.5)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1.4
-                                        )
-                                )
-                                .cornerRadius(16)
-                                .shadow(color: .cyan.opacity(0.3), radius: 8)
-                                .glow(color: manager.connectedPeripheral?.identifier == device.identifier ? .green : .cyan, radius: 5)
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+
+                        } else {
+                            // 🛰 Реальные устройства
+                            ForEach(manager.peripherals, id: \.identifier) { device in
+                                Button {
+                                    manager.connect(to: device)
+                                } label: {
+                                    HStack(spacing: 15) {
+                                        Image(systemName: "antenna.radiowaves.left.and.right")
+                                            .foregroundColor(.cyan)
+                                            .shadow(color: .cyan.opacity(0.8), radius: 6)
+                                            .font(.title3)
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(device.name ?? "Unknown Device")
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                            Text(manager.connectedPeripheral?.identifier == device.identifier
+                                                 ? "Connected"
+                                                 : "Tap to connect")
+                                                .font(.caption)
+                                                .foregroundColor(manager.connectedPeripheral?.identifier == device.identifier ? .green : .gray)
+                                        }
+
+                                        Spacer()
+
+                                        if manager.connectedPeripheral?.identifier == device.identifier {
+                                            Circle()
+                                                .fill(.green)
+                                                .frame(width: 10, height: 10)
+                                                .shadow(color: .green.opacity(0.7), radius: 6)
+                                        }
+                                    }
+                                    .padding()
+                                    .background(Color.white.opacity(0.05))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [.cyan.opacity(0.6), .blue.opacity(0.5)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 1.4
+                                            )
+                                    )
+                                    .cornerRadius(16)
+                                    .shadow(color: .cyan.opacity(0.3), radius: 8)
+                                    .glow(color: manager.connectedPeripheral?.identifier == device.identifier ? .green : .cyan, radius: 5)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                     .padding(.horizontal)
                 }
                 .frame(maxHeight: 340)
                 .scrollIndicators(.hidden)
-                
+
                 // 🔘 Disconnect
-                if manager.connectedPeripheral != nil {
+                if manager.connectedPeripheral != nil || manager.connectedDemoDevice != nil {
                     NeonButton(title: "Disconnect") {
                         manager.disconnect()
                     }
@@ -195,8 +250,10 @@ struct BluetoothConnectView: View {
                 Text(manager.alertMessage)
             }
         }
-        // 🎯 Реакция радара на новые устройства
+        // 🎯 Реакция радара на новые устройства (только для реального режима)
         .onReceive(manager.$peripherals.map(\.count)) { newValue in
+            guard !manager.isDemoMode else { return }
+
             if newValue > lastDeviceCount {
                 SoundManager.shared.playPing()
                 withAnimation(.easeInOut(duration: 0.4)) {
@@ -212,9 +269,6 @@ struct BluetoothConnectView: View {
             }
             lastDeviceCount = newValue
         }
-
-
-
     }
 }
 

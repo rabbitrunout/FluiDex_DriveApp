@@ -91,14 +91,15 @@ struct CarSetupView: View {
         do {
             try viewContext.save()
 
+            // ✅ создаём дефолтное расписание ТО для этой машины
+            MaintenanceManager.shared.generateDefaultItems(for: car, in: viewContext)
+
             withAnimation { showSavedMessage = true }
 
-            // 🔥 Делает AppEntryView → ProfileView
             withAnimation {
                 setupCompleted = true
             }
 
-            // 🔥 Закрываем окно
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 dismiss()
             }
@@ -107,6 +108,7 @@ struct CarSetupView: View {
             print("❌ Save error:", error)
         }
     }
+
 }
 
 #Preview {
