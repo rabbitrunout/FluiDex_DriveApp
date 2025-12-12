@@ -67,6 +67,7 @@ struct ProfileView: View {
     // MARK: 👤 Профиль
     private var profileHeader: some View {
         VStack(spacing: 10) {
+            
             Image(systemName: "person.crop.circle.fill")
                 .resizable()
                 .scaledToFit()

@@ -3,7 +3,7 @@ import SwiftUI
 struct MainTabView: View {
     @Binding var selectedTab: Int
     @Binding var isLoggedIn: Bool
-    @StateObject private var tabBar = TabBarVisibility() // ✅ добавлено
+    @StateObject private var tabBar = TabBarVisibility()
 
     @AppStorage("userName") private var userName: String = "Driver"
 
@@ -17,8 +17,9 @@ struct MainTabView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Приветствие
-                if tabBar.isVisible { // 👈 теперь панель и заголовок скрываются
+
+                // верхняя плашка приветствия можно оставить / убрать по желанию
+                if tabBar.isVisible {
                     VStack(spacing: 6) {
                         Text("👋 Hi, \(userName)")
                             .font(.system(size: 24, weight: .bold))
@@ -38,11 +39,10 @@ struct MainTabView: View {
                                        startPoint: .top,
                                        endPoint: .bottom)
                     )
-                    .transition(.opacity)
                 }
 
-                // Контент вкладок
                 TabView(selection: $selectedTab) {
+                    // 0 — Dashboard
                     NavigationStack {
                         DashboardView()
                     }
@@ -51,32 +51,40 @@ struct MainTabView: View {
                     }
                     .tag(0)
 
-                    AddServiceView()
-                        .tabItem {
-                            Label("Service", systemImage: "wrench.and.screwdriver")
-                        }
-                        .tag(1)
+                    // 1 — Service
+                    NavigationStack {
+                        AddServiceView()
+                    }
+                    .tabItem {
+                        Label("Service", systemImage: "wrench.and.screwdriver")
+                    }
+                    .tag(1)
 
-                    OBDLiveDataView()
-                        .tabItem {
-                            Label("OBD", systemImage: "antenna.radiowaves.left.and.right")
-                        }
-                        .tag(2)
+                    // 2 — OBD
+                    NavigationStack {
+                        OBDLiveDataView()
+                    }
+                    .tabItem {
+                        Label("OBD", systemImage: "antenna.radiowaves.left.and.right")
+                    }
+                    .tag(2)
 
-                    ProfileView(isLoggedIn: $isLoggedIn)
-                        .tabItem {
-                            Label("Profile", systemImage: "person.crop.circle")
-                        }
-                        .tag(3)
+                    // 3 — новая вкладка AI & Alerts
+                    NavigationStack {
+                        AIAlertsView()
+                    }
+                    .tabItem {
+                        Label("AI & Alerts", systemImage: "sparkles")
+                    }
+                    .tag(3)
                 }
-
-
                 .accentColor(Color(hex: "#FFD54F"))
             }
         }
-        .environmentObject(tabBar) // ✅ передано вниз во все экраны
+        .environmentObject(tabBar)
     }
 }
+
 
 #Preview {
     MainTabView(selectedTab: .constant(0), isLoggedIn: .constant(true))
