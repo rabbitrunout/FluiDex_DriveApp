@@ -16,6 +16,9 @@ struct AddServiceView: View {
     @State private var showDatePicker = false
     @State private var isSaving = false
 
+    // ✅ новый sheet для полного выбора
+    @State private var showServiceTypeSheet = false
+
     let serviceTypes = ["Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
 
     var body: some View {
@@ -30,6 +33,7 @@ struct AddServiceView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
+
                     // 🏁 Заголовок
                     Text("Add New Service")
                         .font(.system(size: 28, weight: .bold))
@@ -37,14 +41,9 @@ struct AddServiceView: View {
                         .shadow(color: .cyan.opacity(0.6), radius: 8, y: 4)
                         .padding(.top, 20)
 
-                    // 🔧 Тип сервиса
-                    glowingPicker(
-                        "Service Type",
-                        selection: $serviceType,
-                        options: serviceTypes,
-                        icon: "gearshape.fill"
-                    )
-                    .padding(.horizontal)
+                    // ✅ НОВЫЙ БЛОК: Service Type (chips + sheet)
+                    serviceTypeChips
+                        .padding(.horizontal)
 
                     // 🚘 Пробег
                     glowingField("Mileage (km)", text: $mileage, icon: "speedometer")
@@ -79,8 +78,8 @@ struct AddServiceView: View {
                         if showDatePicker {
                             DatePicker("", selection: $date, displayedComponents: .date)
                                 .datePickerStyle(.graphical)
-                                .colorScheme(.dark) // 👈 принудительно тёмный стиль
-                                .accentColor(Color(hex: "#FFD54F")) // подсветка выбора
+                                .colorScheme(.dark)
+                                .accentColor(Color(hex: "#FFD54F"))
                                 .tint(Color(hex: "#FFD54F"))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
@@ -106,11 +105,10 @@ struct AddServiceView: View {
                                 .transition(.opacity.combined(with: .slide))
                                 .padding(.horizontal, 10)
                         }
-
                     }
                     .padding(.horizontal)
 
-                    // 💵 Стоимость запчастей и работы
+                    // 💵 Стоимость
                     glowingField("Parts Cost ($)", text: $costParts, icon: "wrench.fill")
                         .onChange(of: costParts) { recalcTotal() }
                         .padding(.horizontal)
@@ -134,7 +132,7 @@ struct AddServiceView: View {
                     glowingField("Note (optional)", text: $note, icon: "pencil")
                         .padding(.horizontal)
 
-                    // 💾 Кнопка сохранения
+                    // 💾 Save
                     Button {
                         saveService()
                     } label: {
@@ -143,6 +141,7 @@ struct AddServiceView: View {
                                 .font(.system(size: 22, weight: .bold))
                                 .rotationEffect(.degrees(isSaving ? 360 : 0))
                                 .animation(isSaving ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isSaving)
+
                             Text(isSaving ? "Saving..." : "Save Service")
                                 .font(.system(size: 18, weight: .bold))
                         }
@@ -162,14 +161,147 @@ struct AddServiceView: View {
         }
         .onAppear { withAnimation { tabBar.isVisible = false } }
         .onDisappear { withAnimation { tabBar.isVisible = true } }
+        .sheet(isPresented: $showServiceTypeSheet) {
+            serviceTypePickerSheet
+        }
     }
 
-    // MARK: - 💰 Подсчет суммы
+    // MARK: - ✅ Chips (все названия видны + тап откроет sheet)
+    private var serviceTypeChips: some View {
+        VStack(alignment: .leading, spacing: 10) {
+
+            HStack {
+                Image(systemName: "gearshape.fill")
+                    .foregroundColor(Color(hex: "#FFD54F"))
+
+                Text("Service Type")
+                    .foregroundColor(.white.opacity(0.9))
+                    .font(.headline)
+
+                Spacer()
+
+                // кнопка "All" (удобно для полного выбора)
+                Button {
+                    showServiceTypeSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(serviceType)
+                            .foregroundColor(Color(hex: "#FFD54F"))
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+
+                        Image(systemName: "chevron.down")
+                            .foregroundColor(.white.opacity(0.7))
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.cyan.opacity(0.35), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(serviceTypes, id: \.self) { type in
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                serviceType = type
+                            }
+                        } label: {
+                            Text(type)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(type == serviceType ? .black : .white.opacity(0.9))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false) // ✅ не обрезает текст
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 14)
+                                .background(
+                                    type == serviceType
+                                    ? Color(hex: "#FFD54F")
+                                    : Color.white.opacity(0.08)
+                                )
+                                .cornerRadius(18)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .stroke(Color.cyan.opacity(type == serviceType ? 0.0 : 0.35), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(Color.white.opacity(0.06))
+            .cornerRadius(14)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.cyan.opacity(0.35), lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - ✅ Sheet со всем списком (все названия 100% видны)
+    private var serviceTypePickerSheet: some View {
+        NavigationStack {
+            ZStack {
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+
+                List {
+                    ForEach(serviceTypes, id: \.self) { type in
+                        Button {
+                            serviceType = type
+                            showServiceTypeSheet = false
+                        } label: {
+                            HStack {
+                                Text(type)
+                                    .foregroundColor(.white)
+
+                                Spacer()
+
+                                if type == serviceType {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(Color(hex: "#FFD54F"))
+                                }
+                            }
+                        }
+                        .listRowBackground(Color.white.opacity(0.06))
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Service Type")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { showServiceTypeSheet = false }
+                        .foregroundColor(Color(hex: "#FFD54F"))
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - 💰 Total
     private func recalcTotal() {
         totalCost = (Double(costParts) ?? 0) + (Double(costLabor) ?? 0)
     }
 
-    // MARK: - 💾 Сохранение записи
+    // MARK: - 💾 Save
     private func saveService() {
         let newRecord = ServiceRecord(context: viewContext)
         newRecord.id = UUID()
@@ -180,7 +312,6 @@ struct AddServiceView: View {
         newRecord.nextServiceKm = Int32((Int(mileage) ?? 0) + 10000)
         newRecord.nextServiceDate = Calendar.current.date(byAdding: .day, value: 180, to: date)
 
-        // 🚗 Привязка к активной машине
         let fetch: NSFetchRequest<Car> = Car.fetchRequest()
         fetch.predicate = NSPredicate(format: "isSelected == true")
         if let activeCar = try? viewContext.fetch(fetch).first {
@@ -190,14 +321,11 @@ struct AddServiceView: View {
         do {
             try viewContext.save()
             FirebaseSyncManager.shared.syncServiceRecord(newRecord)
-
-
             dismiss()
         } catch {
             print("❌ Error saving service: \(error.localizedDescription)")
         }
     }
-
 }
 
 #Preview {

@@ -19,27 +19,7 @@ struct MainTabView: View {
             VStack(spacing: 0) {
 
                 // верхняя плашка приветствия можно оставить / убрать по желанию
-                if tabBar.isVisible {
-                    VStack(spacing: 6) {
-                        Text("👋 Hi, \(userName)")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(Color(hex: "#FFD54F"))
-                            .shadow(color: .yellow.opacity(0.7), radius: 10, y: 4)
-
-                        Text("Welcome back to your dashboard")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                            .shadow(color: .cyan.opacity(0.6), radius: 8)
-                    }
-                    .padding(.top, 50)
-                    .padding(.bottom, 25)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        LinearGradient(colors: [Color.cyan.opacity(0.15), .clear],
-                                       startPoint: .top,
-                                       endPoint: .bottom)
-                    )
-                }
+               
 
                 TabView(selection: $selectedTab) {
                     // 0 — Dashboard

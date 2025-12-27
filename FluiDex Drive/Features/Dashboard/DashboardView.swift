@@ -12,6 +12,9 @@ struct DashboardView: View {
     @State private var carOpacity: CGFloat = 0
     @State private var glowPulse = false
 
+    // 🔗 выбранный алерт (ШАГ 2)
+    @State private var selectedMaintenance: MaintenanceItem?
+
     // MARK: - CoreData
     @FetchRequest(
         sortDescriptors: [],
@@ -25,7 +28,6 @@ struct DashboardView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
 
-            // Фон
             LinearGradient(
                 gradient: Gradient(colors: [.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -36,17 +38,19 @@ struct DashboardView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 28) {
 
-                    Spacer().frame(height: 55) // место для кнопки профиля
+                    Spacer().frame(height: 55)
 
                     carBlock
                     TripHUDView().padding(.horizontal, 20)
 
-                    Divider().overlay(Color.cyan.opacity(0.3)).padding(.horizontal, 60)
+                    Divider()
+                        .overlay(Color.cyan.opacity(0.3))
+                        .padding(.horizontal, 60)
 
                     nextServiceBlock
                     recentServicesBlock
-                    scheduleLink
                     upcomingMaintenanceBlock
+                    scheduleLink
 
                     NeonButton(title: "Add Service Record") {
                         showAddService = true
@@ -60,7 +64,6 @@ struct DashboardView: View {
                 }
             }
 
-            // 🔗 Мини-профиль в верхнем правом углу
             profileBadge
                 .padding(.trailing, 18)
                 .padding(.top, 18)
@@ -69,9 +72,18 @@ struct DashboardView: View {
             ProfileView(isLoggedIn: .constant(true))
                 .environment(\.managedObjectContext, viewContext)
         }
+        .sheet(item: $selectedMaintenance) { item in
+            NavigationStack {
+                MaintenanceScheduleView(focusItem: item)
+                    .environment(\.managedObjectContext, viewContext)
+            }
+        }
+
+
+
     }
 
-    // MARK: - Profile Badge
+    // MARK: - Profile badge
     private var profileBadge: some View {
         Button {
             showProfile = true
@@ -93,7 +105,7 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - CAR BLOCK
+    // MARK: - CAR
     private var carBlock: some View {
         VStack(spacing: 12) {
             if let car = selectedCar.first {
@@ -111,8 +123,9 @@ struct DashboardView: View {
                         .shadow(color: .cyan.opacity(0.7), radius: 30)
                         .opacity(carOpacity)
                         .onAppear {
-                            withAnimation(.easeOut(duration: 0.8)) { carOpacity = 1 }
-                            glowPulse = true
+                            withAnimation(.easeOut(duration: 0.8)) {
+                                carOpacity = 1
+                            }
                         }
                 }
 
@@ -131,7 +144,6 @@ struct DashboardView: View {
         Group {
             if let car = selectedCar.first,
                let next = getNextService(for: car) {
-
                 VStack(spacing: 10) {
                     Text("Next Service Due:")
                         .foregroundColor(.white.opacity(0.7))
@@ -147,7 +159,7 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - RECENT SERVICES
+    // MARK: - RECENT
     private var recentServicesBlock: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Recent Services")
@@ -160,14 +172,13 @@ struct DashboardView: View {
                 Text("No records yet.")
                     .foregroundColor(.white.opacity(0.6))
                     .padding(.leading, 20)
-
             } else {
                 ForEach(items) { record in
-                    HStack(spacing: 16) {
+                    HStack {
                         Image(systemName: iconForType(record.type ?? ""))
                             .foregroundColor(.yellow)
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading) {
                             Text(record.type ?? "")
                                 .foregroundColor(.white)
                             Text("\(record.mileage) km • \(formatDate(record.date))")
@@ -185,7 +196,56 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - MAINTENANCE SCHEDULE LINK
+    // MARK: - UPCOMING (tap enabled)
+    @ViewBuilder
+    private var upcomingMaintenanceBlock: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Upcoming Maintenance")
+                .foregroundColor(.white)
+                .padding(.leading, 20)
+
+            if let car = selectedCar.first {
+
+                let raw = getUpcomingMaintenance(for: car)
+                let unique = removeDuplicates(raw)
+                let urgent = unique.filter { daysUntil($0.nextChangeDate) <= 7 }
+
+                if urgent.isEmpty {
+                    Text("No urgent tasks. You’re all set ✅")
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.leading, 20)
+                } else {
+                    ForEach(urgent, id: \.self) { item in
+                        Button {
+                            selectedMaintenance = item
+                        } label: {
+                            HStack {
+                                Circle()
+                                    .fill(urgencyColor(for: item))
+                                    .frame(width: 10, height: 10)
+
+                                Text(item.title ?? "")
+                                    .foregroundColor(.white)
+
+                                Spacer()
+
+                                Text(formatDate(item.nextChangeDate))
+                                    .foregroundColor(.white.opacity(0.7))
+                                    .font(.caption)
+                            }
+                            .padding()
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(16)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 20)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - LINK
     private var scheduleLink: some View {
         VStack(alignment: .leading) {
             Text("Maintenance Schedule")
@@ -208,67 +268,45 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - UPCOMING MAINTENANCE
-    private var upcomingMaintenanceBlock: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Upcoming Maintenance")
-                .foregroundColor(.white)
-                .padding(.leading, 20)
+    // MARK: - HELPERS
 
-            guard let car = selectedCar.first else {
-                return AnyView(Text("No car selected").foregroundColor(.white.opacity(0.5)))
-            }
-
-            let raw = getUpcomingMaintenance(for: car)
-            let filtered = filterTasksByFuel(raw, for: car)
-            let items = removeDuplicates(filtered)
-
-            if items.isEmpty {
-                return AnyView(
-                    Text("No upcoming tasks.")
-                        .foregroundColor(.white.opacity(0.6))
-                        .padding(.leading, 20)
-                )
-            }
-
-            return AnyView(
-                VStack(spacing: 14) {
-                    ForEach(items, id: \.self) { item in
-                        HStack {
-                            Text(item.title ?? "")
-                                .foregroundColor(.white)
-                            Spacer()
-                            Text(formatDate(item.nextChangeDate))
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.06))
-                        .cornerRadius(16)
-                        .padding(.horizontal, 20)
-                    }
-                }
-            )
-        }
+    private func getUpcomingMaintenance(for car: Car) -> [MaintenanceItem] {
+        let req: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
+        req.predicate = NSPredicate(format: "car == %@", car)
+        req.sortDescriptors = [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)]
+        return (try? viewContext.fetch(req)) ?? []
     }
 
-    // MARK: - HELPERS
     private func removeDuplicates(_ items: [MaintenanceItem]) -> [MaintenanceItem] {
-        var seen: [String: MaintenanceItem] = [:]
-
+        var map: [String: MaintenanceItem] = [:]
         for item in items {
             let key = item.title ?? ""
-
-            if let existing = seen[key] {
-                if let d1 = item.nextChangeDate, let d2 = existing.nextChangeDate, d1 < d2 {
-                    seen[key] = item
+            if let existing = map[key] {
+                if let d1 = item.nextChangeDate,
+                   let d2 = existing.nextChangeDate,
+                   d1 < d2 {
+                    map[key] = item
                 }
             } else {
-                seen[key] = item
+                map[key] = item
             }
         }
+        return Array(map.values)
+    }
 
-        return Array(seen.values)
-            .sorted { ($0.nextChangeDate ?? .distantFuture) < ($1.nextChangeDate ?? .distantFuture) }
+    private func daysUntil(_ date: Date?) -> Int {
+        guard let date else { return 999 }
+        return Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 999
+    }
+
+    private func urgencyColor(for item: MaintenanceItem) -> Color {
+        let d = daysUntil(item.nextChangeDate)
+        switch d {
+        case ..<0: return .red
+        case 0...2: return .orange
+        case 3...7: return .yellow
+        default: return .green
+        }
     }
 
     private func formatDate(_ date: Date?) -> String {
@@ -296,13 +334,6 @@ struct DashboardView: View {
     private func getNextService(for car: Car) -> (mileage: Int32, date: Date)? {
         guard let last = allRecords.first(where: { $0.car == car }) else { return nil }
         return (last.nextServiceKm, last.nextServiceDate ?? Date())
-    }
-
-    private func getUpcomingMaintenance(for car: Car) -> [MaintenanceItem] {
-        let req: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
-        req.predicate = NSPredicate(format: "car == %@", car)
-        req.sortDescriptors = [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)]
-        return (try? viewContext.fetch(req)) ?? []
     }
 }
 
