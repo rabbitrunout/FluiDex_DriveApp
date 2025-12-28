@@ -16,14 +16,38 @@ struct AddServiceView: View {
     @State private var showDatePicker = false
     @State private var isSaving = false
 
-    // ✅ новый sheet для полного выбора
     @State private var showServiceTypeSheet = false
+
+    // ✅ активная машина (fuelType)
+    @FetchRequest(
+        sortDescriptors: [],
+        predicate: NSPredicate(format: "isSelected == true")
+    ) private var selectedCar: FetchedResults<Car>
 
     let serviceTypes = ["Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
 
+    // MARK: - AI tips (простые, но полезные)
+    private var aiTipText: String {
+        switch serviceType {
+        case "Oil": return "Tip: many drivers change oil every ~10,000 km or ~6 months."
+        case "Tires": return "Tip: rotate tires every ~8,000–12,000 km to even wear."
+        case "Fluids": return "Tip: check coolant/brake fluid seasonally and before long trips."
+        case "Battery": return "Tip: battery health check is useful before winter."
+        case "Brakes": return "Tip: brake inspection is recommended if you hear squeaks or feel vibration."
+        case "Inspection": return "Tip: quick inspection helps catch issues early."
+        default: return "Tip: add a clear note so AI can learn your maintenance history better."
+        }
+    }
+
+    private var isServiceAllowedForFuel: Bool {
+        guard let car = selectedCar.first else { return true }
+        let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
+        if allowed.isEmpty { return true }                 // если нет правил — не ограничиваем
+        return allowed.contains(serviceType)               // serviceType совпадает с названием задачи
+    }
+
     var body: some View {
         ZStack {
-            // 🌌 Неоновый фон
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -33,82 +57,27 @@ struct AddServiceView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
-
-                    // 🏁 Заголовок
                     Text("Add New Service")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
                         .shadow(color: .cyan.opacity(0.6), radius: 8, y: 4)
                         .padding(.top, 20)
 
-                    // ✅ НОВЫЙ БЛОК: Service Type (chips + sheet)
+                    // ✅ Chips + Sheet
                     serviceTypeChips
                         .padding(.horizontal)
 
-                    // 🚘 Пробег
+                    // ✅ SMART HINT (rules + AI tip)
+                    smartHintCard
+                        .padding(.horizontal)
+
                     glowingField("Mileage (km)", text: $mileage, icon: "speedometer")
                         .keyboardType(.numberPad)
                         .padding(.horizontal)
 
-                    // 📅 Дата с авто-сворачиванием
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Date")
-                            .font(.headline)
-                            .foregroundColor(.white.opacity(0.9))
+                    dateBlock
+                        .padding(.horizontal)
 
-                        Button {
-                            withAnimation(.spring()) { showDatePicker.toggle() }
-                        } label: {
-                            HStack {
-                                Text(date.formatted(date: .abbreviated, time: .omitted))
-                                    .foregroundColor(.white)
-                                Spacer()
-                                Image(systemName: "calendar")
-                                    .foregroundColor(Color(hex: "#FFD54F"))
-                            }
-                            .padding()
-                            .background(Color.white.opacity(0.08))
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.cyan.opacity(0.4), lineWidth: 1)
-                            )
-                        }
-
-                        if showDatePicker {
-                            DatePicker("", selection: $date, displayedComponents: .date)
-                                .datePickerStyle(.graphical)
-                                .colorScheme(.dark)
-                                .accentColor(Color(hex: "#FFD54F"))
-                                .tint(Color(hex: "#FFD54F"))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
-                                )
-                                .environment(\.colorScheme, .dark)
-                                .scrollContentBackground(.hidden)
-                                .background(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color(hex: "#1A1A40").opacity(0.95),
-                                            Color.black.opacity(0.8)
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                    .cornerRadius(16)
-                                    .shadow(color: .cyan.opacity(0.3), radius: 8, y: 4)
-                                )
-                                .onChange(of: date) {
-                                    withAnimation(.spring()) { showDatePicker = false }
-                                }
-                                .transition(.opacity.combined(with: .slide))
-                                .padding(.horizontal, 10)
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // 💵 Стоимость
                     glowingField("Parts Cost ($)", text: $costParts, icon: "wrench.fill")
                         .onChange(of: costParts) { recalcTotal() }
                         .padding(.horizontal)
@@ -117,7 +86,6 @@ struct AddServiceView: View {
                         .onChange(of: costLabor) { recalcTotal() }
                         .padding(.horizontal)
 
-                    // 💰 Итого
                     HStack {
                         Text("Total: ")
                             .foregroundColor(.white)
@@ -128,11 +96,9 @@ struct AddServiceView: View {
                     }
                     .padding(.horizontal, 40)
 
-                    // 📝 Заметка
                     glowingField("Note (optional)", text: $note, icon: "pencil")
                         .padding(.horizontal)
 
-                    // 💾 Save
                     Button {
                         saveService()
                     } label: {
@@ -140,7 +106,10 @@ struct AddServiceView: View {
                             Image(systemName: isSaving ? "hourglass" : "checkmark.circle.fill")
                                 .font(.system(size: 22, weight: .bold))
                                 .rotationEffect(.degrees(isSaving ? 360 : 0))
-                                .animation(isSaving ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isSaving)
+                                .animation(
+                                    isSaving ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                                    value: isSaving
+                                )
 
                             Text(isSaving ? "Saving..." : "Save Service")
                                 .font(.system(size: 18, weight: .bold))
@@ -166,10 +135,95 @@ struct AddServiceView: View {
         }
     }
 
-    // MARK: - ✅ Chips (все названия видны + тап откроет sheet)
+    // MARK: - Smart hint card (rules + AI tip)
+    private var smartHintCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: isServiceAllowedForFuel ? "sparkles" : "exclamationmark.triangle.fill")
+                    .foregroundColor(isServiceAllowedForFuel ? .cyan : .yellow)
+
+                Text(isServiceAllowedForFuel ? "Recommended for your car" : "Not typical for your fuel type")
+                    .foregroundColor(.white.opacity(0.9))
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+            }
+
+            Text(aiTipText)
+                .foregroundColor(.white.opacity(0.7))
+                .font(.footnote)
+        }
+        .padding()
+        .background(Color.white.opacity(0.06))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.cyan.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Date block
+    private var dateBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Date")
+                .font(.headline)
+                .foregroundColor(.white.opacity(0.9))
+
+            Button {
+                withAnimation(.spring()) { showDatePicker.toggle() }
+            } label: {
+                HStack {
+                    Text(date.formatted(date: .abbreviated, time: .omitted))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Image(systemName: "calendar")
+                        .foregroundColor(Color(hex: "#FFD54F"))
+                }
+                .padding()
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.cyan.opacity(0.4), lineWidth: 1)
+                )
+            }
+
+            if showDatePicker {
+                DatePicker("", selection: $date, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .colorScheme(.dark)
+                    .accentColor(Color(hex: "#FFD54F"))
+                    .tint(Color(hex: "#FFD54F"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
+                    )
+                    .environment(\.colorScheme, .dark)
+                    .scrollContentBackground(.hidden)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color(hex: "#1A1A40").opacity(0.95),
+                                Color.black.opacity(0.8)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .cornerRadius(16)
+                        .shadow(color: .cyan.opacity(0.3), radius: 8, y: 4)
+                    )
+                    .onChange(of: date) {
+                        withAnimation(.spring()) { showDatePicker = false }
+                    }
+                    .transition(.opacity.combined(with: .slide))
+                    .padding(.horizontal, 10)
+            }
+        }
+    }
+
+    // MARK: - Chips (все названия видны)
     private var serviceTypeChips: some View {
         VStack(alignment: .leading, spacing: 10) {
-
             HStack {
                 Image(systemName: "gearshape.fill")
                     .foregroundColor(Color(hex: "#FFD54F"))
@@ -180,7 +234,6 @@ struct AddServiceView: View {
 
                 Spacer()
 
-                // кнопка "All" (удобно для полного выбора)
                 Button {
                     showServiceTypeSheet = true
                 } label: {
@@ -219,7 +272,7 @@ struct AddServiceView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(type == serviceType ? .black : .white.opacity(0.9))
                                 .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false) // ✅ не обрезает текст
+                                .fixedSize(horizontal: true, vertical: false)
                                 .padding(.vertical, 10)
                                 .padding(.horizontal, 14)
                                 .background(
@@ -249,7 +302,7 @@ struct AddServiceView: View {
         }
     }
 
-    // MARK: - ✅ Sheet со всем списком (все названия 100% видны)
+    // MARK: - Sheet со всем списком
     private var serviceTypePickerSheet: some View {
         NavigationStack {
             ZStack {
@@ -269,9 +322,7 @@ struct AddServiceView: View {
                             HStack {
                                 Text(type)
                                     .foregroundColor(.white)
-
                                 Spacer()
-
                                 if type == serviceType {
                                     Image(systemName: "checkmark.circle.fill")
                                         .foregroundColor(Color(hex: "#FFD54F"))
@@ -296,12 +347,12 @@ struct AddServiceView: View {
         .presentationDragIndicator(.visible)
     }
 
-    // MARK: - 💰 Total
+    // MARK: - Total
     private func recalcTotal() {
         totalCost = (Double(costParts) ?? 0) + (Double(costLabor) ?? 0)
     }
 
-    // MARK: - 💾 Save
+    // MARK: - Save
     private func saveService() {
         let newRecord = ServiceRecord(context: viewContext)
         newRecord.id = UUID()

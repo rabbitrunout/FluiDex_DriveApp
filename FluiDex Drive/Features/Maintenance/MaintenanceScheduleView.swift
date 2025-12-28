@@ -4,25 +4,30 @@ import CoreData
 struct MaintenanceScheduleView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    // 👇 Фокусный элемент (пришел с Dashboard / Alerts)
+    // 👇 Фокусный элемент (приходит с Dashboard)
     private let focusItem: MaintenanceItem?
 
-    init(focusItem: MaintenanceItem? = nil) {
-        self.focusItem = focusItem
-    }
-
+    // Все элементы обслуживания
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)],
         animation: .easeInOut
     ) private var items: FetchedResults<MaintenanceItem>
 
+    // Выбранная машина (fuelType)
     @FetchRequest(
         sortDescriptors: [],
         predicate: NSPredicate(format: "isSelected == true")
     ) private var selectedCar: FetchedResults<Car>
 
     @State private var showAddItem = false
+
+    // Для подсветки нужной строки
     @State private var highlightedID: NSManagedObjectID? = nil
+
+    // ✅ Инициализатор с дефолтом (чтобы MaintenanceScheduleView() тоже работал)
+    init(focusItem: MaintenanceItem? = nil) {
+        self.focusItem = focusItem
+    }
 
     // MARK: - Date formatter
     private func formatDate(_ date: Date?) -> String {
@@ -32,7 +37,7 @@ struct MaintenanceScheduleView: View {
         return f.string(from: date)
     }
 
-    // MARK: - Remove duplicates (keep nearest date by title)
+    // MARK: - Удаление дублей (оставляем ближайшую дату по title)
     private func removeDuplicates(_ list: [MaintenanceItem]) -> [MaintenanceItem] {
         var unique: [String: MaintenanceItem] = [:]
 
@@ -52,17 +57,19 @@ struct MaintenanceScheduleView: View {
             .sorted { ($0.nextChangeDate ?? .distantFuture) < ($1.nextChangeDate ?? .distantFuture) }
     }
 
-    // MARK: - Fuel filtering
+    // MARK: - Фильтрация под тип топлива + только выбранная машина
     private var filteredItems: [MaintenanceItem] {
         guard let car = selectedCar.first else { return Array(items) }
 
-        let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
-        let all = allowed.isEmpty ? Array(items) : items.filter { allowed.contains($0.title ?? "") }
-        let cleaned = removeDuplicates(all)
+        // ✅ только задачи выбранной машины
+        let carItems = items.filter { $0.car == car }
 
-        return cleaned.sorted {
-            ($0.nextChangeDate ?? .distantFuture) < ($1.nextChangeDate ?? .distantFuture)
-        }
+        let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
+        let all = allowed.isEmpty
+            ? Array(carItems)
+            : carItems.filter { allowed.contains($0.title ?? "") }
+
+        return removeDuplicates(all)
     }
 
     // MARK: - UI
@@ -75,50 +82,35 @@ struct MaintenanceScheduleView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 Text("Maintenance Schedule")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.white)
                     .shadow(color: .cyan.opacity(0.7), radius: 12)
-                    .padding(.top, 22)
+                    .padding(.top, 40)
 
                 if filteredItems.isEmpty {
                     Text("No maintenance tasks for this vehicle type.")
                         .foregroundColor(.white.opacity(0.6))
                         .padding(.top, 40)
-                    Spacer()
                 } else {
                     ScrollViewReader { proxy in
-                        ScrollView(showsIndicators: false) {
+                        ScrollView {
                             VStack(spacing: 14) {
                                 ForEach(filteredItems) { item in
                                     scheduleRow(item)
-                                        .id(item.objectID) // 👈 ключ для scrollTo
+                                        .id(item.objectID) // ✅ важно для scrollTo
                                 }
                             }
-                            .padding(.bottom, 20)
+                            .padding(.bottom, 30)
                         }
                         .onAppear {
-                            // 👇 авто-фокус при открытии
-                            guard let focusItem else { return }
-                            let id = focusItem.objectID
-
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                    proxy.scrollTo(id, anchor: .center)
-                                }
-                                highlightedID = id
-
-                                // подсветка исчезает мягко
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                    withAnimation(.easeOut(duration: 0.6)) {
-                                        highlightedID = nil
-                                    }
-                                }
-                            }
+                            focusIfNeeded(proxy)
                         }
                     }
                 }
+
+                Spacer()
 
                 NeonButton(title: "Add Maintenance Task") {
                     showAddItem = true
@@ -127,11 +119,34 @@ struct MaintenanceScheduleView: View {
                     AddMaintenanceItemView()
                         .environment(\.managedObjectContext, viewContext)
                 }
-                .padding(.bottom, 18)
+                .padding(.bottom, 40)
             }
-            .padding(.horizontal, 8)
         }
         .navigationBarBackButtonHidden(false)
+    }
+
+    // MARK: - Focus logic
+    private func focusIfNeeded(_ proxy: ScrollViewProxy) {
+        guard let focusItem else { return }
+
+        // Если focusItem отфильтровался (не относится к fuelType/машине), ничего не делаем
+        let targetID = focusItem.objectID
+        guard filteredItems.contains(where: { $0.objectID == targetID }) else { return }
+
+        // Скроллим и подсвечиваем
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeInOut(duration: 0.45)) {
+                proxy.scrollTo(targetID, anchor: .center)
+            }
+            highlightedID = targetID
+
+            // Убираем подсветку через 2.5 сек
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    highlightedID = nil
+                }
+            }
+        }
     }
 
     // MARK: - Row UI
@@ -179,11 +194,15 @@ struct MaintenanceScheduleView: View {
             ZStack {
                 Color.white.opacity(0.05)
 
-                // 👇 подсветка фокуса
+                // ✅ подсветка фокуса (неон)
                 if isHighlighted {
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: "#FFD54F").opacity(0.95), lineWidth: 2)
-                        .shadow(color: Color(hex: "#FFD54F").opacity(0.35), radius: 10)
+                        .fill(Color.cyan.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.cyan.opacity(0.75), lineWidth: 1.5)
+                        )
+                        .shadow(color: .cyan.opacity(0.45), radius: 12)
                 }
             }
         )
@@ -206,6 +225,6 @@ struct MaintenanceScheduleView: View {
 }
 
 #Preview {
-    MaintenanceScheduleView(focusItem: nil)
+    MaintenanceScheduleView()
         .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }
