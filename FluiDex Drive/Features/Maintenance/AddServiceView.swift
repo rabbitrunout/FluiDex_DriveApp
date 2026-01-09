@@ -6,9 +6,11 @@ struct AddServiceView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var tabBar: TabBarVisibility
 
-    @State private var serviceType = "Oil"
-    @State private var mileage = ""
-    @State private var date = Date()
+    // ✅ State должны инициализироваться через _state = State(...)
+    @State private var serviceType: String
+    @State private var mileage: String
+    @State private var date: Date
+
     @State private var note = ""
     @State private var costParts = ""
     @State private var costLabor = ""
@@ -16,34 +18,21 @@ struct AddServiceView: View {
     @State private var showDatePicker = false
     @State private var isSaving = false
 
-    @State private var showServiceTypeSheet = false
-
-    // ✅ активная машина (fuelType)
-    @FetchRequest(
-        sortDescriptors: [],
-        predicate: NSPredicate(format: "isSelected == true")
-    ) private var selectedCar: FetchedResults<Car>
-
     let serviceTypes = ["Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
 
-    // MARK: - AI tips (простые, но полезные)
-    private var aiTipText: String {
-        switch serviceType {
-        case "Oil": return "Tip: many drivers change oil every ~10,000 km or ~6 months."
-        case "Tires": return "Tip: rotate tires every ~8,000–12,000 km to even wear."
-        case "Fluids": return "Tip: check coolant/brake fluid seasonally and before long trips."
-        case "Battery": return "Tip: battery health check is useful before winter."
-        case "Brakes": return "Tip: brake inspection is recommended if you hear squeaks or feel vibration."
-        case "Inspection": return "Tip: quick inspection helps catch issues early."
-        default: return "Tip: add a clear note so AI can learn your maintenance history better."
-        }
-    }
+    // ✅ Prefill (из Dashboard)
+    private let prefilledType: String?
+    private let prefilledMileage: Int32?
+    private let prefilledDate: Date?
 
-    private var isServiceAllowedForFuel: Bool {
-        guard let car = selectedCar.first else { return true }
-        let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
-        if allowed.isEmpty { return true }                 // если нет правил — не ограничиваем
-        return allowed.contains(serviceType)               // serviceType совпадает с названием задачи
+    init(prefilledType: String? = nil, prefilledMileage: Int32? = nil, prefilledDate: Date? = nil) {
+        self.prefilledType = prefilledType
+        self.prefilledMileage = prefilledMileage
+        self.prefilledDate = prefilledDate
+
+        _serviceType = State(initialValue: prefilledType ?? "Oil")
+        _mileage = State(initialValue: prefilledMileage.map { String($0) } ?? "")
+        _date = State(initialValue: prefilledDate ?? Date())
     }
 
     var body: some View {
@@ -57,33 +46,72 @@ struct AddServiceView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
+
                     Text("Add New Service")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
                         .shadow(color: .cyan.opacity(0.6), radius: 8, y: 4)
                         .padding(.top, 20)
 
-                    // ✅ Chips + Sheet
-                    serviceTypeChips
-                        .padding(.horizontal)
-
-                    // ✅ SMART HINT (rules + AI tip)
-                    smartHintCard
-                        .padding(.horizontal)
+                    // тип сервиса (твоя функция)
+                    glowingPicker(
+                        "Service Type",
+                        selection: $serviceType,
+                        options: serviceTypes,
+                        icon: "gearshape.fill"
+                    )
+                    .padding(.horizontal)
 
                     glowingField("Mileage (km)", text: $mileage, icon: "speedometer")
                         .keyboardType(.numberPad)
                         .padding(.horizontal)
 
-                    dateBlock
-                        .padding(.horizontal)
+                    // Date
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Date")
+                            .font(.headline)
+                            .foregroundColor(.white.opacity(0.9))
 
+                        Button {
+                            withAnimation(.spring()) { showDatePicker.toggle() }
+                        } label: {
+                            HStack {
+                                Text(date.formatted(date: .abbreviated, time: .omitted))
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Image(systemName: "calendar")
+                                    .foregroundColor(Color(hex: "#FFD54F"))
+                            }
+                            .padding()
+                            .background(Color.white.opacity(0.08))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.cyan.opacity(0.4), lineWidth: 1)
+                            )
+                        }
+
+                        if showDatePicker {
+                            DatePicker("", selection: $date, displayedComponents: .date)
+                                .datePickerStyle(.graphical)
+                                .colorScheme(.dark)
+                                .tint(Color(hex: "#FFD54F"))
+                                .onChange(of: date) { _, _ in
+                                    withAnimation(.spring()) { showDatePicker = false }
+                                }
+                                .transition(.opacity.combined(with: .slide))
+                                .padding(.horizontal, 10)
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    // Costs
                     glowingField("Parts Cost ($)", text: $costParts, icon: "wrench.fill")
-                        .onChange(of: costParts) { recalcTotal() }
+                        .onChange(of: costParts) { _, _ in recalcTotal() }
                         .padding(.horizontal)
 
                     glowingField("Labor Cost ($)", text: $costLabor, icon: "hammer.fill")
-                        .onChange(of: costLabor) { recalcTotal() }
+                        .onChange(of: costLabor) { _, _ in recalcTotal() }
                         .padding(.horizontal)
 
                     HStack {
@@ -99,18 +127,13 @@ struct AddServiceView: View {
                     glowingField("Note (optional)", text: $note, icon: "pencil")
                         .padding(.horizontal)
 
+                    // Save
                     Button {
                         saveService()
                     } label: {
                         HStack {
                             Image(systemName: isSaving ? "hourglass" : "checkmark.circle.fill")
                                 .font(.system(size: 22, weight: .bold))
-                                .rotationEffect(.degrees(isSaving ? 360 : 0))
-                                .animation(
-                                    isSaving ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
-                                    value: isSaving
-                                )
-
                             Text(isSaving ? "Saving..." : "Save Service")
                                 .font(.system(size: 18, weight: .bold))
                         }
@@ -120,246 +143,34 @@ struct AddServiceView: View {
                         .background(Color(hex: "#FFD54F"))
                         .cornerRadius(30)
                         .shadow(color: Color.yellow.opacity(0.4), radius: 10, y: 6)
-                        .scaleEffect(isSaving ? 0.95 : 1.0)
-                        .animation(.spring(), value: isSaving)
                     }
                     .padding(.horizontal, 60)
                     .padding(.bottom, 40)
                 }
             }
         }
-        .onAppear { withAnimation { tabBar.isVisible = false } }
+        .onAppear {
+            withAnimation { tabBar.isVisible = false }
+            recalcTotal()
+        }
         .onDisappear { withAnimation { tabBar.isVisible = true } }
-        .sheet(isPresented: $showServiceTypeSheet) {
-            serviceTypePickerSheet
-        }
     }
 
-    // MARK: - Smart hint card (rules + AI tip)
-    private var smartHintCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: isServiceAllowedForFuel ? "sparkles" : "exclamationmark.triangle.fill")
-                    .foregroundColor(isServiceAllowedForFuel ? .cyan : .yellow)
-
-                Text(isServiceAllowedForFuel ? "Recommended for your car" : "Not typical for your fuel type")
-                    .foregroundColor(.white.opacity(0.9))
-                    .font(.subheadline.weight(.semibold))
-
-                Spacer()
-            }
-
-            Text(aiTipText)
-                .foregroundColor(.white.opacity(0.7))
-                .font(.footnote)
-        }
-        .padding()
-        .background(Color.white.opacity(0.06))
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.cyan.opacity(0.25), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Date block
-    private var dateBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Date")
-                .font(.headline)
-                .foregroundColor(.white.opacity(0.9))
-
-            Button {
-                withAnimation(.spring()) { showDatePicker.toggle() }
-            } label: {
-                HStack {
-                    Text(date.formatted(date: .abbreviated, time: .omitted))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Image(systemName: "calendar")
-                        .foregroundColor(Color(hex: "#FFD54F"))
-                }
-                .padding()
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.cyan.opacity(0.4), lineWidth: 1)
-                )
-            }
-
-            if showDatePicker {
-                DatePicker("", selection: $date, displayedComponents: .date)
-                    .datePickerStyle(.graphical)
-                    .colorScheme(.dark)
-                    .accentColor(Color(hex: "#FFD54F"))
-                    .tint(Color(hex: "#FFD54F"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.cyan.opacity(0.3), lineWidth: 1)
-                    )
-                    .environment(\.colorScheme, .dark)
-                    .scrollContentBackground(.hidden)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color(hex: "#1A1A40").opacity(0.95),
-                                Color.black.opacity(0.8)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .cornerRadius(16)
-                        .shadow(color: .cyan.opacity(0.3), radius: 8, y: 4)
-                    )
-                    .onChange(of: date) {
-                        withAnimation(.spring()) { showDatePicker = false }
-                    }
-                    .transition(.opacity.combined(with: .slide))
-                    .padding(.horizontal, 10)
-            }
-        }
-    }
-
-    // MARK: - Chips (все названия видны)
-    private var serviceTypeChips: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "gearshape.fill")
-                    .foregroundColor(Color(hex: "#FFD54F"))
-
-                Text("Service Type")
-                    .foregroundColor(.white.opacity(0.9))
-                    .font(.headline)
-
-                Spacer()
-
-                Button {
-                    showServiceTypeSheet = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(serviceType)
-                            .foregroundColor(Color(hex: "#FFD54F"))
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-
-                        Image(systemName: "chevron.down")
-                            .foregroundColor(.white.opacity(0.7))
-                            .font(.caption.weight(.semibold))
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .background(Color.white.opacity(0.06))
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.cyan.opacity(0.35), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(serviceTypes, id: \.self) { type in
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                                serviceType = type
-                            }
-                        } label: {
-                            Text(type)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(type == serviceType ? .black : .white.opacity(0.9))
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 14)
-                                .background(
-                                    type == serviceType
-                                    ? Color(hex: "#FFD54F")
-                                    : Color.white.opacity(0.08)
-                                )
-                                .cornerRadius(18)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(Color.cyan.opacity(type == serviceType ? 0.0 : 0.35), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 6)
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(14)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.cyan.opacity(0.35), lineWidth: 1)
-            )
-        }
-    }
-
-    // MARK: - Sheet со всем списком
-    private var serviceTypePickerSheet: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-
-                List {
-                    ForEach(serviceTypes, id: \.self) { type in
-                        Button {
-                            serviceType = type
-                            showServiceTypeSheet = false
-                        } label: {
-                            HStack {
-                                Text(type)
-                                    .foregroundColor(.white)
-                                Spacer()
-                                if type == serviceType {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(Color(hex: "#FFD54F"))
-                                }
-                            }
-                        }
-                        .listRowBackground(Color.white.opacity(0.06))
-                    }
-                }
-                .scrollContentBackground(.hidden)
-            }
-            .navigationTitle("Service Type")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showServiceTypeSheet = false }
-                        .foregroundColor(Color(hex: "#FFD54F"))
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    // MARK: - Total
     private func recalcTotal() {
         totalCost = (Double(costParts) ?? 0) + (Double(costLabor) ?? 0)
     }
 
-    // MARK: - Save
     private func saveService() {
+        isSaving = true
+
         let newRecord = ServiceRecord(context: viewContext)
         newRecord.id = UUID()
         newRecord.type = serviceType
         newRecord.mileage = Int32(mileage) ?? 0
         newRecord.date = date
         newRecord.note = note
+
+        // TODO: можно связать это с MaintenanceRules позже
         newRecord.nextServiceKm = Int32((Int(mileage) ?? 0) + 10000)
         newRecord.nextServiceDate = Calendar.current.date(byAdding: .day, value: 180, to: date)
 
@@ -376,11 +187,13 @@ struct AddServiceView: View {
         } catch {
             print("❌ Error saving service: \(error.localizedDescription)")
         }
+
+        isSaving = false
     }
 }
 
 #Preview {
-    AddServiceView()
+    AddServiceView(prefilledType: "Oil", prefilledMileage: 40000, prefilledDate: .now)
         .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         .environmentObject(TabBarVisibility())
 }

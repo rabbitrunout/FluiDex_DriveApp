@@ -8,9 +8,11 @@ struct DashboardView: View {
 
     @State private var showProfile = false
     @State private var showAddService = false
-    @State private var carOpacity: CGFloat = 0
 
-    // ✅ для перехода по тапу на срочный maintenance
+    // быстрый лог, когда нажали Next Service
+    @State private var showQuickServiceLog = false
+
+    @State private var carOpacity: CGFloat = 0
     @State private var selectedMaintenance: MaintenanceItem? = nil
 
     // MARK: - CoreData
@@ -35,35 +37,36 @@ struct DashboardView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 22) {
+                    Spacer().frame(height: 55)
 
-                    Spacer().frame(height: 52)
-
-                    // ✅ компактный header + shrink on scroll
-                    carHeaderCompact
+                    carBlock
 
                     TripHUDView()
                         .padding(.horizontal, 20)
 
                     Divider()
-                        .overlay(Color.cyan.opacity(0.3))
+                        .overlay(Color.cyan.opacity(0.25))
                         .padding(.horizontal, 60)
 
-                    nextServiceBlockWithUrgency
+                    nextServiceCard
                     recentServicesBlock
-                    upcomingMaintenanceBlock
-                    scheduleLink
+                    maintenanceCard
 
                     NeonButton(title: "Add Service Record") {
                         showAddService = true
                     }
                     .sheet(isPresented: $showAddService) {
-                        AddServiceView()
+                        AddServiceView(
+                            prefilledType: nil,
+                            prefilledMileage: nil,
+                            prefilledDate: nil
+                        )
+
                             .environment(\.managedObjectContext, viewContext)
                     }
 
-                    Spacer(minLength: 40)
+                    Spacer(minLength: 50)
                 }
-                .padding(.bottom, 18)
             }
 
             profileBadge
@@ -74,17 +77,27 @@ struct DashboardView: View {
             ProfileView(isLoggedIn: .constant(true))
                 .environment(\.managedObjectContext, viewContext)
         }
+
+        // ✅ тап по maintenance alert → открываем schedule + фокус
         .sheet(item: $selectedMaintenance) { item in
             MaintenanceScheduleView(focusItem: item)
                 .environment(\.managedObjectContext, viewContext)
         }
+
+        // ✅ тап по Next Service → быстрый лог сервиса (prefilled AddServiceView)
+        .sheet(isPresented: $showQuickServiceLog) {
+            AddServiceView(
+                prefilledType: "Oil",
+                prefilledMileage: selectedCar.first?.mileage ?? 0,
+                prefilledDate: Date()
+            )
+            .environment(\.managedObjectContext, viewContext)
+        }
     }
 
-    // MARK: - Profile Badge
+    // MARK: - Profile badge
     private var profileBadge: some View {
-        Button {
-            showProfile = true
-        } label: {
+        Button { showProfile = true } label: {
             HStack(spacing: 8) {
                 Image(systemName: "person.circle.fill")
                     .font(.system(size: 24))
@@ -98,106 +111,122 @@ struct DashboardView: View {
             .padding(.horizontal, 12)
             .background(Color.white.opacity(0.07))
             .cornerRadius(20)
-            .shadow(color: .yellow.opacity(0.3), radius: 6)
+            .shadow(color: .yellow.opacity(0.25), radius: 6)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - ✅ Compact Car Header with scroll shrink
-    private var carHeaderCompact: some View {
-        GeometryReader { geo in
-            let minY = geo.frame(in: .global).minY
-            let shrink = clamp((-minY) / 180, 0, 1)            // 0...1
-            let imageHeight = lerp(from: 185, to: 120, t: shrink)
-            let titleSize = lerp(from: 26, to: 22, t: shrink)
-            let subOpacity = 1 - 0.25 * shrink
+    // MARK: - Car header
+    private var carBlock: some View {
+        VStack(spacing: 12) {
+            if let car = selectedCar.first {
+                ZStack {
+                    Circle()
+                        .fill(Color.cyan.opacity(0.22))
+                        .blur(radius: 25)
+                        .frame(width: 260, height: 40)
+                        .offset(y: 90)
 
-            VStack(spacing: 10) {
-                if let car = selectedCar.first {
-                    ZStack {
-                        Circle()
-                            .fill(Color.cyan.opacity(0.28))
-                            .blur(radius: 25)
-                            .frame(width: 240, height: 34)
-                            .offset(y: imageHeight * 0.42)
-
-                        Image(uiImage: UIImage(named: car.imageName ?? "") ?? UIImage())
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: imageHeight)
-                            .shadow(color: .cyan.opacity(0.7), radius: 30)
-                            .opacity(carOpacity)
-                            .onAppear {
-                                withAnimation(.easeOut(duration: 0.8)) { carOpacity = 1 }
-                            }
-                            .scaleEffect(1 - 0.05 * shrink) // легкое сжатие
-                            .animation(.easeOut(duration: 0.2), value: shrink)
-                    }
-
-                    Text(car.name ?? "Unknown Car")
-                        .font(.system(size: titleSize, weight: .bold))
-                        .foregroundColor(.white)
-                        .animation(.easeOut(duration: 0.2), value: shrink)
-
-                    Text("\(car.year ?? "") • \(car.mileage) km")
-                        .foregroundColor(.white.opacity(0.7 * subOpacity))
-                        .animation(.easeOut(duration: 0.2), value: shrink)
-                } else {
-                    Text("No car selected")
-                        .foregroundColor(.white.opacity(0.6))
+                    Image(uiImage: UIImage(named: car.imageName ?? "") ?? UIImage())
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 165)
+                        .shadow(color: .cyan.opacity(0.55), radius: 26)
+                        .opacity(carOpacity)
+                        .onAppear {
+                            withAnimation(.easeOut(duration: 0.8)) { carOpacity = 1 }
+                        }
                 }
+
+                Text(car.name ?? "Unknown Car")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundColor(.white)
+
+                // ✅ car.year = String
+                Text("\(car.year ?? "—") • \(car.mileage) km")
+                    .foregroundColor(.white.opacity(0.7))
+
+            } else {
+                Text("No car selected")
+                    .foregroundColor(.white.opacity(0.6))
             }
-            .frame(maxWidth: .infinity)
         }
-        .frame(height: 250) // контейнер header (можно чуть уменьшить, если хочешь)
-        .padding(.horizontal, 16)
     }
 
-    // MARK: - ✅ Next Service + urgency badge
-    private var nextServiceBlockWithUrgency: some View {
+    // MARK: - Next Service (кликабельно + badge срочности + красная рамка)
+    private var nextServiceCard: some View {
         Group {
             if let car = selectedCar.first,
                let next = getNextService(for: car) {
 
-                let urgency = serviceUrgency(for: next.date)
+                let badge = nextServiceBadge(nextDate: next.date,
+                                             dueMileage: next.mileage,
+                                             currentMileage: car.mileage)
 
-                VStack(spacing: 10) {
-                    HStack {
-                        Text("Next Service Due:")
-                            .foregroundColor(.white.opacity(0.7))
+                Button {
+                    showQuickServiceLog = true
+                } label: {
+                    VStack(spacing: 10) {
+                        HStack {
+                            Text("Next Service Due:")
+                                .foregroundColor(.white.opacity(0.7))
 
-                        Spacer()
+                            Spacer()
 
-                        // badge: ● overdue / in X days
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(urgency.color)
-                                .frame(width: 8, height: 8)
-
-                            Text(urgency.label)
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(.white.opacity(0.9))
+                            urgencyPill(text: badge.text, color: badge.color)
                         }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 10)
-                        .background(Color.white.opacity(0.07))
-                        .cornerRadius(14)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(urgency.color.opacity(0.35), lineWidth: 1)
-                        )
-                    }
 
-                    Text("\(next.mileage) km • \(formatDate(next.date))")
-                        .font(.headline)
-                        .foregroundColor(Color(hex: "#FFD54F"))
+                        Text("\(Int(next.mileage)) km • \(formatDate(next.date))")
+                            .font(.headline)
+                            .foregroundColor(Color(hex: "#FFD54F"))
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(badge.color.opacity(0.45), lineWidth: 1)
+                    )
+                    .shadow(color: badge.color.opacity(0.22), radius: 10, y: 6)
                 }
-                .padding()
-                .background(Color.white.opacity(0.05))
-                .cornerRadius(16)
+                .buttonStyle(.plain)
                 .padding(.horizontal, 20)
             }
         }
+    }
+
+    private func urgencyPill(text: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.white.opacity(0.9))
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .background(Color.white.opacity(0.06))
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(color.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    /// ✅ одна логика “overdue”: по дате ИЛИ по пробегу
+    private func nextServiceBadge(nextDate: Date, dueMileage: Int32, currentMileage: Int32) -> (text: String, color: Color) {
+        let overdueByMileage = currentMileage >= dueMileage
+
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: nextDate).day ?? 999
+        let overdueByDate = days < 0
+
+        if overdueByMileage || overdueByDate {
+            return ("overdue", .red)
+        }
+        if days <= 2 { return ("in \(days)d", .orange) }
+        if days <= 7 { return ("in \(days)d", .yellow) }
+        return ("in \(days)d", .green)
     }
 
     // MARK: - Recent Services
@@ -214,15 +243,15 @@ struct DashboardView: View {
                     .foregroundColor(.white.opacity(0.6))
                     .padding(.leading, 20)
             } else {
-                ForEach(items) { record in
-                    HStack(spacing: 16) {
+                ForEach(items, id: \.objectID) { record in
+                    HStack(spacing: 14) {
                         Image(systemName: iconForType(record.type ?? ""))
                             .foregroundColor(.yellow)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(record.type ?? "")
                                 .foregroundColor(.white)
-                            Text("\(record.mileage) km • \(formatDate(record.date))")
+                            Text("\(Int(record.mileage)) km • \(formatDate(record.date))")
                                 .foregroundColor(.white.opacity(0.7))
                                 .font(.caption)
                         }
@@ -237,38 +266,68 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Upcoming Maintenance (urgent only) + Tap to focus
-    private var upcomingMaintenanceBlock: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Upcoming Maintenance")
-                .foregroundColor(.white)
-                .padding(.leading, 20)
+    // MARK: - Maintenance (одна карточка, без дублей)
+    private var maintenanceCard: some View {
+        // ✅ заранее считаем, чтобы компилятор не “умирал”
+        let car = selectedCar.first
+        let urgent: [MaintenanceItem] = car.map { urgentMaintenance(for: $0) } ?? []
+        let urgentCount = urgent.count
+        let urgentPreview = Array(urgent.prefix(2))
 
-            if let car = selectedCar.first {
-                let urgent = urgentMaintenance(for: car)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(Color(hex: "#FFD54F"))
+                    Text("Maintenance")
+                        .foregroundColor(.white)
+                        .font(.headline)
+                }
 
-                if urgent.isEmpty {
-                    Text("No urgent tasks. You’re all set ✅")
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(urgentCount == 0 ? .green : .orange)
+                        .frame(width: 8, height: 8)
+
+                    Text(urgentCount == 0 ? "All set" : "\(urgentCount) urgent")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(12)
+            }
+
+            if car == nil {
+                Text("No car selected")
+                    .foregroundColor(.white.opacity(0.6))
+            } else {
+                if urgentCount == 0 {
+                    Text("No urgent maintenance in the next 7 days.")
                         .foregroundColor(.white.opacity(0.6))
-                        .padding(.leading, 20)
+                        .font(.subheadline)
                 } else {
-                    VStack(spacing: 14) {
-                        ForEach(urgent, id: \.self) { item in
+                    VStack(spacing: 10) {
+                        ForEach(urgentPreview, id: \.objectID) { item in
                             Button {
                                 selectedMaintenance = item
                             } label: {
-                                HStack {
+                                HStack(spacing: 10) {
                                     Circle()
                                         .fill(urgencyColor(for: item))
                                         .frame(width: 10, height: 10)
 
                                     Text(item.title ?? "")
                                         .foregroundColor(.white)
+                                        .lineLimit(1)
 
                                     Spacer()
 
                                     Text(formatDate(item.nextChangeDate))
-                                        .foregroundColor(.white.opacity(0.7))
+                                        .foregroundColor(.white.opacity(0.65))
                                         .font(.caption)
 
                                     Image(systemName: "chevron.right")
@@ -277,45 +336,48 @@ struct DashboardView: View {
                                 }
                                 .padding()
                                 .background(Color.white.opacity(0.06))
-                                .cornerRadius(16)
+                                .cornerRadius(14)
                             }
                             .buttonStyle(.plain)
-                            .padding(.horizontal, 20)
+                        }
+
+                        if urgentCount > 2 {
+                            Text("+\(urgentCount - 2) more")
+                                .foregroundColor(.white.opacity(0.55))
+                                .font(.caption.weight(.semibold))
+                                .padding(.top, 2)
                         }
                     }
+                    .padding(.top, 4)
                 }
-            } else {
-                Text("No car selected")
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(.leading, 20)
+
+                NavigationLink(destination: MaintenanceScheduleView(focusItem: nil)) {
+                    HStack {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(.cyan)
+                        Text("See full maintenance schedule")
+                            .foregroundColor(.white)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.white.opacity(0.35))
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(14)
+                }
+                .padding(.top, 6)
+                .buttonStyle(.plain)
             }
         }
+        .padding(16)
+        .background(Color.white.opacity(0.07))
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
+        .padding(.horizontal, 20)
     }
 
-    // MARK: - Schedule Link
-    private var scheduleLink: some View {
-        VStack(alignment: .leading) {
-            Text("Maintenance Schedule")
-                .foregroundColor(.white)
-                .padding(.leading, 20)
-
-            NavigationLink(destination: MaintenanceScheduleView(focusItem: nil)) {
-                HStack {
-                    Image(systemName: "calendar.badge.clock")
-                        .foregroundColor(.cyan)
-                    Text("View full schedule")
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-                .padding()
-                .background(Color.white.opacity(0.06))
-                .cornerRadius(16)
-                .padding(.horizontal, 40)
-            }
-        }
-    }
-
-    // MARK: - Helpers (maintenance list)
+    // MARK: - Helpers
 
     private func urgentMaintenance(for car: Car) -> [MaintenanceItem] {
         let req: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
@@ -325,14 +387,12 @@ struct DashboardView: View {
         let items = (try? viewContext.fetch(req)) ?? []
 
         let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
-        let filtered = allowed.isEmpty
-            ? items
-            : items.filter { allowed.contains($0.title ?? "") }
+        let filtered = allowed.isEmpty ? items : items.filter { allowed.contains($0.title ?? "") }
 
         let unique = removeDuplicates(filtered)
 
         return unique
-            .filter { daysUntil($0.nextChangeDate) <= 7 } // urgent <= 7 days (incl overdue)
+            .filter { daysUntil($0.nextChangeDate) <= 7 }
             .sorted { ($0.nextChangeDate ?? .distantFuture) < ($1.nextChangeDate ?? .distantFuture) }
     }
 
@@ -366,41 +426,6 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Helpers (Next Service urgency badge)
-
-    private struct ServiceUrgency {
-        let label: String
-        let color: Color
-    }
-
-    private func serviceUrgency(for nextDate: Date) -> ServiceUrgency {
-        let d = Calendar.current.dateComponents([.day], from: Date(), to: nextDate).day ?? 999
-
-        if d < 0 {
-            return ServiceUrgency(label: "overdue", color: .red)
-        } else if d == 0 {
-            return ServiceUrgency(label: "today", color: .orange)
-        } else if d <= 2 {
-            return ServiceUrgency(label: "in \(d) day\(d == 1 ? "" : "s")", color: .orange)
-        } else if d <= 7 {
-            return ServiceUrgency(label: "in \(d) days", color: .yellow)
-        } else {
-            return ServiceUrgency(label: "in \(d) days", color: .green)
-        }
-    }
-
-    // MARK: - Helpers (services)
-
-    private func recentServices(for car: Car?) -> [ServiceRecord] {
-        guard let car else { return [] }
-        return Array(allRecords.filter { $0.car == car }.prefix(3))
-    }
-
-    private func getNextService(for car: Car) -> (mileage: Int32, date: Date)? {
-        guard let last = allRecords.first(where: { $0.car == car }) else { return nil }
-        return (last.nextServiceKm, last.nextServiceDate ?? Date())
-    }
-
     private func formatDate(_ date: Date?) -> String {
         guard let date else { return "—" }
         let f = DateFormatter()
@@ -418,14 +443,15 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Math helpers
-
-    private func clamp(_ v: CGFloat, _ minV: CGFloat, _ maxV: CGFloat) -> CGFloat {
-        min(max(v, minV), maxV)
+    private func recentServices(for car: Car?) -> [ServiceRecord] {
+        guard let car else { return [] }
+        return Array(allRecords.filter { $0.car == car }.prefix(3))
     }
 
-    private func lerp(from a: CGFloat, to b: CGFloat, t: CGFloat) -> CGFloat {
-        a + (b - a) * t
+    /// ✅ Optional tuple (иначе будет ошибка conditional binding)
+    private func getNextService(for car: Car) -> (mileage: Int32, date: Date)? {
+        guard let last = allRecords.first(where: { $0.car == car }) else { return nil }
+        return (last.nextServiceKm, last.nextServiceDate ?? Date())
     }
 }
 
