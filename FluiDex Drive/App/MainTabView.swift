@@ -33,12 +33,23 @@ struct MainTabView: View {
 
                     // 1 — Service
                     NavigationStack {
-                        AddServiceView()
+                        ServiceHistoryView()
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    NavigationLink {
+                                        AddServiceView()
+                                    } label: {
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundColor(Color(hex: "#FFD54F"))
+                                    }
+                                }
+                            }
                     }
                     .tabItem {
                         Label("Service", systemImage: "wrench.and.screwdriver")
                     }
                     .tag(1)
+
 
                     // 2 — OBD
                     NavigationStack {

@@ -12,38 +12,67 @@ struct MaintenanceScheduleView: View {
     @EnvironmentObject var tabBar: TabBarVisibility
 
     @AppStorage("avgKmPerDay") private var avgKmPerDay: Double = 40
-    @AppStorage("userEmail") private var userEmail: String = ""        // ✅ NEW
+    @AppStorage("userEmail") private var userEmail: String = ""
 
-    // ✅ Можно fetch-ить все items, а фильтровать по active car
+    // ✅ Fetch all items, filter locally by selectedCar
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)],
         animation: .easeInOut
     ) private var items: FetchedResults<MaintenanceItem>
 
-    // ✅ ВАЖНО: активная машина только текущего пользователя
-    @FetchRequest(
-        sortDescriptors: [],
-        predicate: NSPredicate(format: "isSelected == true AND ownerEmail == %@", (UserDefaults.standard.string(forKey: "userEmail") ?? "").lowercased())
-    ) private var selectedCar: FetchedResults<Car>
+    // ✅ Fetch all cars once (NO predicate with UserDefaults)
+    @FetchRequest(sortDescriptors: [], animation: .easeInOut)
+    private var allCars: FetchedResults<Car>
 
     @State private var showAddItem = false
+    @State private var showSelectCar = false
 
     @State private var quickLogItem: MaintenanceItem? = nil
     @State private var showQuickLog = false
 
-    // MARK: - Formatting
+    @State private var searchText: String = ""
+    @State private var refreshID = UUID()
+
+    enum Filter: String, CaseIterable {
+        case all = "All"
+        case urgent = "Urgent"
+        case upcoming = "Upcoming"
+        case overdue = "Overdue"
+    }
+    @State private var filter: Filter = .all
+
+    // MARK: - Formatters (perf)
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        return f
+    }()
+
+    private static let numberFormatter: NumberFormatter = {
+        let nf = NumberFormatter()
+        nf.numberStyle = .decimal
+        return nf
+    }()
+
+    private var owner: String {
+        userEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    // ✅ Active car for current user (dynamic)
+    private var selectedCar: Car? {
+        guard !owner.isEmpty else { return nil }
+        return allCars.first(where: { ($0.ownerEmail ?? "").lowercased() == owner && $0.isSelected })
+    }
+
+    // MARK: - Helpers
 
     private func formatDate(_ date: Date?) -> String {
         guard let date else { return "—" }
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        return f.string(from: date)
+        return Self.dateFormatter.string(from: date)
     }
 
     private func formatKm(_ km: Int32) -> String {
-        let nf = NumberFormatter()
-        nf.numberStyle = .decimal
-        return nf.string(from: NSNumber(value: km)) ?? "\(km)"
+        Self.numberFormatter.string(from: NSNumber(value: km)) ?? "\(km)"
     }
 
     private func daysUntil(_ date: Date?) -> Int {
@@ -54,12 +83,11 @@ struct MaintenanceScheduleView: View {
         return cal.dateComponents([.day], from: today, to: due).day ?? 9999
     }
 
-    // MARK: - Dedup / filter
-
     private func removeDuplicates(_ list: [MaintenanceItem]) -> [MaintenanceItem] {
         var unique: [String: MaintenanceItem] = [:]
         for item in list {
-            guard let title = item.title else { continue }
+            let title = (item.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { continue }
             if let existing = unique[title] {
                 if let d1 = item.nextChangeDate, let d2 = existing.nextChangeDate, d1 < d2 {
                     unique[title] = item
@@ -72,21 +100,7 @@ struct MaintenanceScheduleView: View {
             .sorted { ($0.nextChangeDate ?? .distantFuture) < ($1.nextChangeDate ?? .distantFuture) }
     }
 
-    // ✅ Показываем только items активной машины текущего пользователя
-    private var filteredItems: [MaintenanceItem] {
-        guard let car = selectedCar.first else { return [] }
-
-        // 1) только для этой машины
-        let carItems = items.filter { $0.car == car }
-
-        // 2) правила по fuelType
-        let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
-        let all = allowed.isEmpty ? carItems : carItems.filter { allowed.contains($0.title ?? "") }
-
-        return removeDuplicates(all)
-    }
-
-    // MARK: - ✅ Due mileage helpers
+    // MARK: - Mileage logic
 
     private func resolvedNextMileage(for item: MaintenanceItem) -> Int32 {
         if item.nextChangeMileage > 0 { return item.nextChangeMileage }
@@ -108,9 +122,8 @@ struct MaintenanceScheduleView: View {
         return Int32(est.rounded())
     }
 
-    // MARK: - ✅ Unified urgency (DATE OR MILEAGE)
-
-    private func unifiedUrgency(item: MaintenanceItem, carMileage: Int32) -> (color: Color, label: String) {
+    // ✅ Unified urgency: based on DATE or MILEAGE (whichever sooner)
+    private func unifiedUrgency(item: MaintenanceItem, carMileage: Int32) -> (color: Color, label: String, effectiveDays: Int) {
         let d = daysUntil(item.nextChangeDate)
 
         let dueMileage = resolvedNextMileage(for: item)
@@ -118,7 +131,7 @@ struct MaintenanceScheduleView: View {
         let overdueByDate = d < 0
 
         if overdueByMileage || overdueByDate {
-            return (.red, "overdue")
+            return (.red, "overdue", min(d, 0))
         }
 
         if dueMileage > 0 {
@@ -126,19 +139,74 @@ struct MaintenanceScheduleView: View {
             let estDaysByKm = avgKmPerDay > 0 ? Int(ceil(Double(remain) / avgKmPerDay)) : 9999
             let effectiveDays = min(d, estDaysByKm)
 
-            if effectiveDays == 0 { return (.orange, "today") }
-            if effectiveDays <= 2 { return (.orange, "in \(effectiveDays)d") }
-            if effectiveDays <= 7 { return (.yellow, "in \(effectiveDays)d") }
-            return (.green, "in \(effectiveDays)d")
+            if effectiveDays == 0 { return (.orange, "today", 0) }
+            if effectiveDays <= 2 { return (.orange, "in \(effectiveDays)d", effectiveDays) }
+            if effectiveDays <= 7 { return (.yellow, "in \(effectiveDays)d", effectiveDays) }
+            return (.green, "in \(effectiveDays)d", effectiveDays)
         }
 
-        if d == 0 { return (.orange, "today") }
-        if d <= 2 { return (.orange, "in \(d)d") }
-        if d <= 7 { return (.yellow, "in \(d)d") }
-        return (.green, "in \(d)d")
+        if d == 0 { return (.orange, "today", 0) }
+        if d <= 2 { return (.orange, "in \(d)d", d) }
+        if d <= 7 { return (.yellow, "in \(d)d", d) }
+        return (.green, "in \(d)d", d)
     }
 
-    // MARK: - ✅ Maintenance → Service type
+    // MARK: - Rules filter
+
+    private func allowedTasks(for car: Car) -> [String] {
+        MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
+    }
+
+    private var baseItemsForSelectedCar: [MaintenanceItem] {
+        guard let car = selectedCar else { return [] }
+
+        let carItems = items.filter { $0.car == car }
+        let allowed = allowedTasks(for: car)
+        let all = allowed.isEmpty ? carItems : carItems.filter { allowed.contains($0.title ?? "") }
+
+        return removeDuplicates(all)
+    }
+
+    private var searchedItems: [MaintenanceItem] {
+        let list = baseItemsForSelectedCar
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return list }
+
+        return list.filter {
+            ($0.title ?? "").lowercased().contains(q) ||
+            ($0.category ?? "").lowercased().contains(q)
+        }
+    }
+
+    private var filteredItems: [MaintenanceItem] {
+        guard let car = selectedCar else { return [] }
+        let carMileage = car.mileage
+
+        switch filter {
+        case .all:
+            return searchedItems
+
+        case .urgent:
+            return searchedItems.filter {
+                let u = unifiedUrgency(item: $0, carMileage: carMileage)
+                return u.color == .red || u.effectiveDays <= 7
+            }
+
+        case .upcoming:
+            return searchedItems.filter {
+                let u = unifiedUrgency(item: $0, carMileage: carMileage)
+                return u.color != .red && u.effectiveDays > 7
+            }
+
+        case .overdue:
+            return searchedItems.filter {
+                let u = unifiedUrgency(item: $0, carMileage: carMileage)
+                return u.color == .red
+            }
+        }
+    }
+
+    // MARK: - Maintenance → Service type
 
     private func serviceTypeForMaintenance(_ item: MaintenanceItem) -> String {
         let title = (item.title ?? "").lowercased()
@@ -166,35 +234,120 @@ struct MaintenanceScheduleView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 20) {
+            VStack(spacing: 14) {
+                // Title
                 Text("Maintenance Schedule")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.white)
                     .shadow(color: .cyan.opacity(0.7), radius: 12)
-                    .padding(.top, 40)
+                    .padding(.top, 28)
 
-                if selectedCar.first == nil {
-                    Text("No car selected.")
-                        .foregroundColor(.white.opacity(0.6))
-                        .padding(.top, 40)
+                // Search
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.white.opacity(0.55))
+                    TextField("Search tasks…", text: $searchText)
+                        .textInputAutocapitalization(.never)
+                        .foregroundColor(.white)
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.cyan.opacity(0.25), lineWidth: 1)
+                )
+                .padding(.horizontal, 16)
+
+                // Filters
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Filter.allCases, id: \.self) { f in
+                            filterPill(f)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+
+                // Content
+                if selectedCar == nil {
+                    VStack(spacing: 12) {
+                        Text("No car selected.")
+                            .foregroundColor(.white.opacity(0.75))
+                            .padding(.top, 30)
+
+                        Text("Select a car to see your schedule.")
+                            .foregroundColor(.white.opacity(0.55))
+                            .font(.subheadline)
+
+                        NeonButton(title: "Select a car") {
+                            showSelectCar = true
+                        }
+                        .padding(.horizontal, 60)
+                        .padding(.top, 6)
+                    }
+                    .padding(.top, 10)
+
                 } else if filteredItems.isEmpty {
-                    Text("No maintenance tasks for this vehicle type.")
-                        .foregroundColor(.white.opacity(0.6))
-                        .padding(.top, 40)
+                    VStack(spacing: 12) {
+                        Text("No tasks found.")
+                            .foregroundColor(.white.opacity(0.75))
+                            .padding(.top, 30)
+
+                        Text("Try another filter or clear search.")
+                            .foregroundColor(.white.opacity(0.55))
+                            .font(.subheadline)
+                    }
+
                 } else {
-                    ScrollView {
-                        VStack(spacing: 14) {
-                            ForEach(filteredItems) { item in
-                                Button {
-                                    quickLogItem = item
-                                    showQuickLog = true
-                                } label: {
-                                    scheduleRow(item)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 14) {
+                                ForEach(filteredItems) { item in
+                                    Button {
+                                        guard selectedCar != nil else { return }
+                                        quickLogItem = item
+                                        showQuickLog = true
+                                    } label: {
+                                        scheduleRow(item)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .id(item.objectID)
+                                    .contextMenu {
+                                        Button("Quick log") {
+                                            guard selectedCar != nil else { return }
+                                            quickLogItem = item
+                                            showQuickLog = true
+                                        }
+
+                                        // ✅ Delete task
+                                        Button(role: .destructive) {
+                                            deleteTask(item)
+                                        } label: {
+                                            Text("Delete")
+                                        }
+
+                                        // ✏️ Edit (если у тебя есть режим редактирования в AddMaintenanceItemView)
+                                        // Button("Edit") { editItem = item; showEdit = true }
+                                    }
                                 }
-                                .buttonStyle(.plain)
+                            }
+                            .padding(.bottom, 20)
+                        }
+                        .id(refreshID)
+                        .onAppear {
+                            // ✅ Focus: auto-scroll + подсветка
+                            if let focusItem {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    proxy.scrollTo(focusItem.objectID, anchor: .top)
+                                }
                             }
                         }
-                        .padding(.bottom, 30)
+                        .refreshable {
+                            // просто триггерим перерисовку
+                            refreshID = UUID()
+                        }
                     }
                 }
 
@@ -203,22 +356,35 @@ struct MaintenanceScheduleView: View {
                 NeonButton(title: "Add Maintenance Task") {
                     showAddItem = true
                 }
-                .sheet(isPresented: $showAddItem) {
-                    AddMaintenanceItemView()
-                        .environment(\.managedObjectContext, viewContext)
-                }
-                .padding(.bottom, 40)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 24)
             }
         }
+        .onChange(of: avgKmPerDay) { _, _ in
+            // ✅ перерисовка если пользователь поменял стиль в настройках
+            refreshID = UUID()
+        }
 
-        // ✅ Quick Log: теперь привязан к конкретному MaintenanceItem
+        // Add task
+        .sheet(isPresented: $showAddItem) {
+            AddMaintenanceItemView()
+                .environment(\.managedObjectContext, viewContext)
+        }
+
+        // Select car
+        .sheet(isPresented: $showSelectCar) {
+            CarSelectionView(hasSelectedCar: .constant(true))
+                .environment(\.managedObjectContext, viewContext)
+        }
+
+        // Quick log
         .sheet(isPresented: $showQuickLog) {
-            if let item = quickLogItem {
+            if let item = quickLogItem, let car = selectedCar {
                 AddServiceView(
                     prefilledType: serviceTypeForMaintenance(item),
-                    prefilledMileage: selectedCar.first?.mileage ?? 0,
+                    prefilledMileage: car.mileage,
                     prefilledDate: Date(),
-                    maintenanceItemID: item.objectID          // ✅ ВАЖНО
+                    maintenanceItemID: item.objectID
                 )
                 .environment(\.managedObjectContext, viewContext)
                 .environmentObject(tabBar)
@@ -226,13 +392,35 @@ struct MaintenanceScheduleView: View {
         }
     }
 
+    private func filterPill(_ f: Filter) -> some View {
+        let isOn = (filter == f)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) { filter = f }
+        } label: {
+            Text(f.rawValue)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(isOn ? .black : .white.opacity(0.9))
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(isOn ? Color(hex: "#FFD54F") : Color.white.opacity(0.06))
+                .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(isOn ? Color.clear : Color.cyan.opacity(0.25), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func scheduleRow(_ item: MaintenanceItem) -> some View {
-        let carMileage: Int32 = selectedCar.first?.mileage ?? 0
+        let carMileage: Int32 = selectedCar?.mileage ?? 0
         let u = unifiedUrgency(item: item, carMileage: carMileage)
 
         let dueMileage = resolvedNextMileage(for: item)
         let remainKm = kmRemaining(item: item, carMileage: carMileage)
         let estKmAtDate = estimatedMileageAtDate(carMileage: carMileage, nextDate: item.nextChangeDate)
+
+        let isFocused = (focusItem?.objectID == item.objectID)
 
         return HStack(alignment: .top, spacing: 12) {
 
@@ -261,8 +449,8 @@ struct MaintenanceScheduleView: View {
                         .font(.caption)
 
                     let txt = remainKm >= 0
-                        ? "Remaining: \(formatKm(remainKm)) km"
-                        : "Over by: \(formatKm(abs(remainKm))) km"
+                    ? "Remaining: \(formatKm(remainKm)) km"
+                    : "Over by: \(formatKm(abs(remainKm))) km"
 
                     Text(txt)
                         .foregroundColor(u.color == .green ? .white.opacity(0.55) : u.color.opacity(0.85))
@@ -308,10 +496,25 @@ struct MaintenanceScheduleView: View {
                 )
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(isFocused ? Color(hex: "#FFD54F").opacity(0.12) : Color.white.opacity(0.05))
         .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isFocused ? Color(hex: "#FFD54F") : .clear, lineWidth: 1.4)
+        )
         .shadow(color: u.color.opacity(0.18), radius: 6)
         .padding(.horizontal, 16)
+    }
+
+    private func deleteTask(_ item: MaintenanceItem) {
+        withAnimation {
+            viewContext.delete(item)
+            do {
+                try viewContext.save()
+            } catch {
+                print("❌ deleteTask save error:", error)
+            }
+        }
     }
 }
 
