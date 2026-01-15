@@ -31,19 +31,24 @@ struct AddServiceView: View {
     // ✅ if type was prefilled (from schedule quick log) -> lock it
     private let isTypeLocked: Bool
 
+    // ✅ IMPORTANT: exact car passed from ServiceHistoryView
+    private let carObjectID: NSManagedObjectID?
+
     let serviceTypes = ["Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
 
     init(
         prefilledType: String? = nil,
         prefilledMileage: Int32? = nil,
         prefilledDate: Date? = nil,
-        maintenanceItemID: NSManagedObjectID? = nil
+        maintenanceItemID: NSManagedObjectID? = nil,
+        carObjectID: NSManagedObjectID? = nil
     ) {
         _serviceType = State(initialValue: prefilledType ?? "Oil")
         _mileage = State(initialValue: String(prefilledMileage ?? 0))
         _date = State(initialValue: prefilledDate ?? Date())
         self.maintenanceItemID = maintenanceItemID
         self.isTypeLocked = (prefilledType != nil)
+        self.carObjectID = carObjectID
     }
 
     var body: some View {
@@ -138,7 +143,7 @@ struct AddServiceView: View {
                     }
                     .padding(.horizontal, 40)
 
-                    // ✅ Next due preview (NOW VISIBLE)
+                    // ✅ Next due preview
                     HStack {
                         Image(systemName: "calendar.badge.clock")
                             .foregroundColor(.cyan)
@@ -270,7 +275,8 @@ struct AddServiceView: View {
         return nf.string(from: NSNumber(value: km)) ?? "\(km)"
     }
 
-    // ✅ fetch current user
+    // MARK: - Fetch helpers
+
     private func fetchCurrentUser() -> User? {
         let owner = currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !owner.isEmpty else { return nil }
@@ -281,7 +287,15 @@ struct AddServiceView: View {
         return try? viewContext.fetch(req).first
     }
 
-    // ✅ fetch active car ONLY for current owner
+    /// ✅ Preferred car: exact `carObjectID` (from ServiceHistoryView) -> fallback to "selected car for owner"
+    private func fetchActiveCarPreferred() -> Car? {
+        if let id = carObjectID,
+           let car = try? viewContext.existingObject(with: id) as? Car {
+            return car
+        }
+        return fetchActiveCarForOwner()
+    }
+
     private func fetchActiveCarForOwner() -> Car? {
         let owner = currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !owner.isEmpty else { return nil }
@@ -348,7 +362,7 @@ struct AddServiceView: View {
     }
 
     private func refreshNextDuePreview() {
-        guard let activeCar = fetchActiveCarForOwner() else {
+        guard let activeCar = fetchActiveCarPreferred() else {
             nextDueKmPreview = 0
             nextDueDatePreview = nil
             previewInfoText = "Select a car to calculate next due."
@@ -356,20 +370,13 @@ struct AddServiceView: View {
         }
 
         let enteredMileage = Int32(mileage) ?? 0
-
         var matched: MaintenanceItem? = nil
 
-        // 1) если пришли из schedule — используем именно тот item
         if let id = maintenanceItemID,
-           let item = try? viewContext.existingObject(with: id) as? MaintenanceItem {
-
-            if item.car == activeCar {
-                matched = item
-            } else {
-                matched = nil
-            }
+           let item = try? viewContext.existingObject(with: id) as? MaintenanceItem,
+           item.car == activeCar {
+            matched = item
         } else {
-            // 2) иначе подбираем по типу
             matched = fetchMaintenanceItemForActiveCar(activeCar, serviceType: serviceType)
         }
 
@@ -377,7 +384,6 @@ struct AddServiceView: View {
 
         nextDueKmPreview = next.km
         nextDueDatePreview = next.nextDate
-
         previewInfoText = "Next due: \(formatKm(next.km)) km • \(formatDateShort(next.nextDate)) (\(next.source))"
     }
 
@@ -388,7 +394,7 @@ struct AddServiceView: View {
 
         let enteredMileage = Int32(mileage) ?? 0
 
-        guard let activeCar = fetchActiveCarForOwner() else {
+        guard let activeCar = fetchActiveCarPreferred() else {
             errorMessage = "No active car for this account. Please select a car first."
             return
         }
@@ -398,7 +404,6 @@ struct AddServiceView: View {
             return
         }
 
-        // ✅ refresh once more before saving (so preview is always fresh)
         refreshNextDuePreview()
 
         let newRecord = ServiceRecord(context: viewContext)
@@ -412,14 +417,13 @@ struct AddServiceView: View {
         newRecord.costLabor = Double(costLabor) ?? 0
         newRecord.totalCost = totalCost
 
-        // ✅ use preview for next service
         newRecord.nextServiceKm = nextDueKmPreview > 0 ? nextDueKmPreview : (enteredMileage + 10000)
         newRecord.nextServiceDate = nextDueDatePreview ?? Calendar.current.date(byAdding: .day, value: 180, to: date)
 
+        // ✅ CRITICAL: bind to the exact car instance we want
         newRecord.car = activeCar
         newRecord.user = currentUser
 
-        // ✅ if from schedule -> update that MaintenanceItem
         if let id = maintenanceItemID,
            let item = try? viewContext.existingObject(with: id) as? MaintenanceItem {
 

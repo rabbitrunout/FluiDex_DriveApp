@@ -37,6 +37,97 @@ struct DashboardView: View {
         userCars.first(where: { $0.isSelected })
     }
 
+    // MARK: - Latest service record (for active car)
+    private var latestRecordForActiveCar: ServiceRecord? {
+        guard let car = activeCar else { return nil }
+        return allRecords.first(where: { $0.car == car })
+    }
+
+    // MARK: - Next due info from latest record
+    private var nextDue: (dueKm: Int32, dueDate: Date)? {
+        guard let rec = latestRecordForActiveCar else { return nil }
+        guard rec.nextServiceKm > 0, let d = rec.nextServiceDate else { return nil }
+        return (rec.nextServiceKm, d)
+    }
+
+    // MARK: - Remaining fraction (0...1) and warning flag
+    /// Uses BOTH mileage + date, picks the "more urgent" (smaller %) as final.
+    private func remainingFractionForNextService(car: Car, record: ServiceRecord) -> Double? {
+        guard record.nextServiceKm > 0, let nextDate = record.nextServiceDate else { return nil }
+
+        // Interval baseline (from last service -> next service)
+        // mileage interval
+        let intervalKm = Double(record.nextServiceKm - record.mileage)
+        let remainingKm = Double(record.nextServiceKm - car.mileage)
+
+        // date interval
+        let baseDate = record.date ?? Date()
+        let intervalDays = Double(max(1, Calendar.current.dateComponents([.day], from: baseDate, to: nextDate).day ?? 1))
+        let remainingDays = Double(Calendar.current.dateComponents([.day], from: Date(), to: nextDate).day ?? 9999)
+
+        var candidates: [Double] = []
+
+        if intervalKm > 0 {
+            let kmFrac = remainingKm / intervalKm
+            candidates.append(kmFrac)
+        }
+        // date is meaningful even if km interval is weird
+        let dayFrac = remainingDays / intervalDays
+        candidates.append(dayFrac)
+
+        // take the most urgent (smallest fraction)
+        let raw = candidates.min() ?? 1.0
+        return min(max(raw, -1.0), 2.0) // keep sane bounds
+    }
+
+    private var shouldShowServiceWarning: Bool {
+        guard let car = activeCar,
+              let rec = latestRecordForActiveCar,
+              let due = nextDue else { return false }
+
+        // overdue if km reached or date passed
+        let overdueByKm = car.mileage >= due.dueKm
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: due.dueDate).day ?? 999
+        let overdueByDate = days < 0
+        if overdueByKm || overdueByDate { return true }
+
+        // <20% remaining logic
+        if let frac = remainingFractionForNextService(car: car, record: rec) {
+            return frac < 0.20
+        }
+        return false
+    }
+
+    private var warningBannerText: (title: String, message: String)? {
+        guard let car = activeCar,
+              let rec = latestRecordForActiveCar,
+              let due = nextDue else { return nil }
+
+        let daysLeft = Calendar.current.dateComponents([.day], from: Date(), to: due.dueDate).day ?? 999
+        let kmLeft = Int(due.dueKm - car.mileage)
+
+        let overdueByKm = car.mileage >= due.dueKm
+        let overdueByDate = daysLeft < 0
+
+        if overdueByKm || overdueByDate {
+            return (
+                "Service overdue",
+                "Next service was due at \(Int(due.dueKm)) km / \(formatDate(due.dueDate))."
+            )
+        }
+
+        // <20% case
+        if let frac = remainingFractionForNextService(car: car, record: rec) {
+            let pct = Int((max(0, min(frac, 1.0))) * 100)
+            return (
+                "Service due soon",
+                "Only \(pct)% left • \(max(kmLeft, 0)) km • \(max(daysLeft, 0)) days"
+            )
+        }
+
+        return nil
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
 
@@ -55,6 +146,11 @@ struct DashboardView: View {
 
                     TripHUDView()
                         .padding(.horizontal, 20)
+
+                    // ✅🔥 IDEAL place for WarningBanner (under TripHUD, before nextService)
+                    if shouldShowServiceWarning, let info = warningBannerText {
+                        WarningBanner(title: info.title, message: info.message)
+                    }
 
                     Divider()
                         .overlay(Color.cyan.opacity(0.25))
@@ -112,29 +208,23 @@ struct DashboardView: View {
     private func fixActiveCarIfNeeded() {
         guard !owner.isEmpty else { return }
 
-        // If user has no cars -> nothing to select
         guard !userCars.isEmpty else {
             carOpacity = 0
             return
         }
 
-        // If this user has active car -> OK
         if activeCar != nil {
             carOpacity = 0
             return
         }
 
-        // Otherwise pick first car for this user and make it globally active
         setGlobalActiveCar(userCars.first!)
     }
 
     private func setGlobalActiveCar(_ car: Car) {
-        // ✅ key fix: only ONE isSelected in whole DB (because AddServiceView uses isSelected == true)
         for c in allCars { c.isSelected = false }
         car.isSelected = true
         try? viewContext.save()
-
-        // reset car animation
         carOpacity = 0
     }
 
@@ -483,7 +573,8 @@ struct DashboardView: View {
 
     private func getNextService(for car: Car) -> (mileage: Int32, date: Date)? {
         guard let last = allRecords.first(where: { $0.car == car }) else { return nil }
-        return (last.nextServiceKm, last.nextServiceDate ?? Date())
+        guard last.nextServiceKm > 0, let d = last.nextServiceDate else { return nil }
+        return (last.nextServiceKm, d)
     }
 }
 
