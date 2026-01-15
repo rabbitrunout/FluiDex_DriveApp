@@ -20,15 +20,15 @@ struct MaintenanceScheduleView: View {
         animation: .easeInOut
     ) private var items: FetchedResults<MaintenanceItem>
 
-    // ✅ Fetch all cars once (NO predicate with UserDefaults)
+    // ✅ Fetch all cars once
     @FetchRequest(sortDescriptors: [], animation: .easeInOut)
     private var allCars: FetchedResults<Car>
 
     @State private var showAddItem = false
     @State private var showSelectCar = false
 
+    // ✅ ONLY THIS (no showQuickLog boolean!)
     @State private var quickLogItem: MaintenanceItem? = nil
-    @State private var showQuickLog = false
 
     @State private var searchText: String = ""
     @State private var refreshID = UUID()
@@ -235,7 +235,6 @@ struct MaintenanceScheduleView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 14) {
-                // Title
                 Text("Maintenance Schedule")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.white)
@@ -308,7 +307,6 @@ struct MaintenanceScheduleView: View {
                                     Button {
                                         guard selectedCar != nil else { return }
                                         quickLogItem = item
-                                        showQuickLog = true
                                     } label: {
                                         scheduleRow(item)
                                     }
@@ -318,18 +316,12 @@ struct MaintenanceScheduleView: View {
                                         Button("Quick log") {
                                             guard selectedCar != nil else { return }
                                             quickLogItem = item
-                                            showQuickLog = true
                                         }
-
-                                        // ✅ Delete task
                                         Button(role: .destructive) {
                                             deleteTask(item)
                                         } label: {
                                             Text("Delete")
                                         }
-
-                                        // ✏️ Edit (если у тебя есть режим редактирования в AddMaintenanceItemView)
-                                        // Button("Edit") { editItem = item; showEdit = true }
                                     }
                                 }
                             }
@@ -337,7 +329,6 @@ struct MaintenanceScheduleView: View {
                         }
                         .id(refreshID)
                         .onAppear {
-                            // ✅ Focus: auto-scroll + подсветка
                             if let focusItem {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                                     proxy.scrollTo(focusItem.objectID, anchor: .top)
@@ -345,7 +336,6 @@ struct MaintenanceScheduleView: View {
                             }
                         }
                         .refreshable {
-                            // просто триггерим перерисовку
                             refreshID = UUID()
                         }
                     }
@@ -361,25 +351,19 @@ struct MaintenanceScheduleView: View {
             }
         }
         .onChange(of: avgKmPerDay) { _, _ in
-            // ✅ перерисовка если пользователь поменял стиль в настройках
             refreshID = UUID()
         }
-
-        // Add task
         .sheet(isPresented: $showAddItem) {
             AddMaintenanceItemView()
                 .environment(\.managedObjectContext, viewContext)
         }
-
-        // Select car
         .sheet(isPresented: $showSelectCar) {
             CarSelectionView(hasSelectedCar: .constant(true))
                 .environment(\.managedObjectContext, viewContext)
         }
-
-        // Quick log
-        .sheet(isPresented: $showQuickLog) {
-            if let item = quickLogItem, let car = selectedCar {
+        // ✅ FIX: sheet(item:) = never opens blank
+        .sheet(item: $quickLogItem) { item in
+            if let car = selectedCar {
                 AddServiceView(
                     prefilledType: serviceTypeForMaintenance(item),
                     prefilledMileage: car.mileage,
@@ -388,6 +372,10 @@ struct MaintenanceScheduleView: View {
                 )
                 .environment(\.managedObjectContext, viewContext)
                 .environmentObject(tabBar)
+            } else {
+                Text("No active car.")
+                    .foregroundColor(.white)
+                    .presentationDetents([.medium])
             }
         }
     }
@@ -423,7 +411,6 @@ struct MaintenanceScheduleView: View {
         let isFocused = (focusItem?.objectID == item.objectID)
 
         return HStack(alignment: .top, spacing: 12) {
-
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Circle().fill(u.color).frame(width: 10, height: 10)
@@ -494,6 +481,7 @@ struct MaintenanceScheduleView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(u.color.opacity(0.35), lineWidth: 1)
                 )
+                .allowsHitTesting(false) // ✅ IMPORTANT: badge won't steal taps
         }
         .padding()
         .background(isFocused ? Color(hex: "#FFD54F").opacity(0.12) : Color.white.opacity(0.05))
@@ -517,6 +505,7 @@ struct MaintenanceScheduleView: View {
         }
     }
 }
+
 
 #Preview {
     NavigationStack {
