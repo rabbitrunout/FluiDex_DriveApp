@@ -5,6 +5,9 @@ import UserNotifications
 
 @main
 struct FluiDex_DriveApp: App {
+    init() {
+            NotificationManager.shared.requestPermission()
+        }
     let persistenceController = PersistenceController.shared
     @AppStorage("isLoggedIn") private var isLoggedIn: Bool = false
     @AppStorage("hasSelectedCar") private var hasSelectedCar: Bool = false

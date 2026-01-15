@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import UIKit
 
 struct ServiceHistoryView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -32,6 +33,13 @@ struct ServiceHistoryView: View {
     @State private var showUndoToast = false
     @State private var undoPayload: DeletedServicePayload? = nil
     @State private var undoHideWorkItem: DispatchWorkItem? = nil
+
+    // ✅ Share (CSV/PDF)
+    private struct ShareItem: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+    @State private var shareItem: ShareItem? = nil
 
     private var owner: String {
         currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -83,7 +91,7 @@ struct ServiceHistoryView: View {
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
 
-                                // ✅ Swipe (оставим) — теперь обе кнопки справа
+                                // ✅ Swipe — обе кнопки справа
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button {
                                         editingRecord = rec
@@ -100,7 +108,7 @@ struct ServiceHistoryView: View {
                                     }
                                 }
 
-                                // ✅ Long-press меню (Edit/Delete)
+                                // ✅ Long-press menu (Edit/Delete)
                                 .contextMenu {
                                     Button {
                                         editingRecord = rec
@@ -133,11 +141,30 @@ struct ServiceHistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddService = true
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(Color(hex: "#FFD54F"))
+                HStack(spacing: 14) {
+                    Button {
+                        showAddService = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(Color(hex: "#FFD54F"))
+                    }
+
+                    Menu {
+                        Button {
+                            exportCSV()
+                        } label: {
+                            Label("Export CSV", systemImage: "doc.text")
+                        }
+
+                        Button {
+                            exportPDF_A4()
+                        } label: {
+                            Label("Export PDF (A4)", systemImage: "doc.richtext")
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundColor(Color(hex: "#FFD54F"))
+                    }
                 }
             }
         }
@@ -153,6 +180,9 @@ struct ServiceHistoryView: View {
         .sheet(item: $editingRecord) { rec in
             EditServiceView(record: rec)
                 .environment(\.managedObjectContext, viewContext)
+        }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.url])
         }
         .confirmationDialog(
             "Delete this service record?",
@@ -268,6 +298,44 @@ struct ServiceHistoryView: View {
         return f.string(from: date)
     }
 
+    // MARK: - Export
+
+    private func exportCSV() {
+        errorMessage = ""
+        guard let car = activeCar else { errorMessage = "No active car selected."; return }
+        let records = recordsForActiveCar
+        guard !records.isEmpty else { errorMessage = "No records to export."; return }
+
+        let safeName = (car.name ?? "Car").replacingOccurrences(of: " ", with: "_")
+        let fileName = "FluiDex_ServiceHistory_\(safeName).csv"
+
+        let csv = ServiceExportManager.shared.makeCSV(car: car, records: records)
+        do {
+            let url = try ServiceExportManager.shared.writeCSVToTempFile(fileName: fileName, csv: csv)
+            shareItem = ShareItem(url: url)
+        } catch {
+            errorMessage = "CSV export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func exportPDF_A4() {
+        errorMessage = ""
+        guard let car = activeCar else { errorMessage = "No active car selected."; return }
+        let records = recordsForActiveCar
+        guard !records.isEmpty else { errorMessage = "No records to export."; return }
+
+        let safeName = (car.name ?? "Car").replacingOccurrences(of: " ", with: "_")
+        let fileName = "FluiDex_ServiceHistory_\(safeName)_A4.pdf"
+
+        let data = ServiceExportManager.shared.makePDFDataA4(car: car, records: records)
+        do {
+            let url = try ServiceExportManager.shared.writePDFToTempFile(fileName: fileName, data: data)
+            shareItem = ShareItem(url: url)
+        } catch {
+            errorMessage = "PDF export failed: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Undo Toast
 
     private func undoToast(payload: DeletedServicePayload) -> some View {
@@ -313,7 +381,6 @@ struct ServiceHistoryView: View {
     }
 
     private func showUndoToastFor(_ payload: DeletedServicePayload) {
-        // если уже был pending undo — отменяем таймер
         undoHideWorkItem?.cancel()
         undoPayload = payload
 
@@ -334,11 +401,9 @@ struct ServiceHistoryView: View {
     private func undoDelete() {
         guard let payload = undoPayload else { return }
 
-        // прячем toast
         undoHideWorkItem?.cancel()
         withAnimation(.easeInOut(duration: 0.2)) { showUndoToast = false }
 
-        // восстановление записи
         let restored = ServiceRecord(context: viewContext)
         restored.id = payload.id
         restored.type = payload.type
@@ -362,7 +427,6 @@ struct ServiceHistoryView: View {
         do {
             try viewContext.save()
 
-            // ✅ пересчитать maintenance обратно (после возврата записи)
             if let car = restored.car {
                 recomputeMaintenance(for: car, serviceType: restored.type ?? "Other")
             }
@@ -383,19 +447,15 @@ struct ServiceHistoryView: View {
             return
         }
 
-        // ✅ snapshot BEFORE delete
         let payload = DeletedServicePayload(from: rec)
-
         let type = rec.type ?? "Other"
+
         viewContext.delete(rec)
 
         do {
             try viewContext.save()
 
-            // ✅ после удаления — пересчитать maintenance
             recomputeMaintenance(for: car, serviceType: type)
-
-            // ✅ показать Undo
             showUndoToastFor(payload)
 
         } catch {
@@ -403,7 +463,7 @@ struct ServiceHistoryView: View {
         }
     }
 
-    // MARK: - Maintenance recompute (как у тебя, оставляем)
+    // MARK: - Maintenance recompute
 
     private func normalizeServiceKey(_ type: String) -> String {
         let t = type.lowercased()
@@ -428,31 +488,27 @@ struct ServiceHistoryView: View {
         case "tire": return title.contains("tire") || cat.contains("tire")
         case "inspect":
             return title.contains("inspect") || title.contains("filter")
-            || cat.contains("inspect") || cat.contains("filter")
+                || cat.contains("inspect") || cat.contains("filter")
         default:
             return false
         }
     }
 
-    /// Берём ПОСЛЕДНИЙ сервис этого типа для машины → обновляем last/next в MaintenanceItem
     private func recomputeMaintenance(for car: Car, serviceType: String) {
         let key = normalizeServiceKey(serviceType)
         guard key != "other" else { return }
 
-        // 1) maintenance items этой машины
         let miReq: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
         miReq.predicate = NSPredicate(format: "car == %@", car)
         let items = (try? viewContext.fetch(miReq)) ?? []
         let matchedItems = items.filter { maintenanceMatches(serviceKey: key, item: $0) }
         guard !matchedItems.isEmpty else { return }
 
-        // 2) записи сервисов этой машины по убыванию даты
         let srReq: NSFetchRequest<ServiceRecord> = ServiceRecord.fetchRequest()
         srReq.predicate = NSPredicate(format: "car == %@", car)
         srReq.sortDescriptors = [NSSortDescriptor(keyPath: \ServiceRecord.date, ascending: false)]
         let records = (try? viewContext.fetch(srReq)) ?? []
 
-        // 3) последняя запись данного типа
         let latestSameType = records.first(where: { normalizeServiceKey($0.type ?? "") == key })
 
         for item in matchedItems {
@@ -474,7 +530,6 @@ struct ServiceHistoryView: View {
             } else {
                 item.lastChangeDate = nil
                 item.lastChangeMileage = 0
-                // next* можно оставить как есть или тоже сбросить — по желанию
             }
         }
 
@@ -515,7 +570,7 @@ private struct DeletedServicePayload {
         self.nextServiceKm = rec.nextServiceKm
         self.nextServiceDate = rec.nextServiceDate
 
-        self.carObjectID = rec.car?.objectID ?? rec.objectID // fallback (хотя car должен быть)
+        self.carObjectID = rec.car?.objectID ?? rec.objectID
         self.userObjectID = rec.user?.objectID
     }
 }

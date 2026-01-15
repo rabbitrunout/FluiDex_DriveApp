@@ -6,13 +6,18 @@ struct SmartMaintenanceView: View {
 
     @AppStorage("userEmail") private var userEmail: String = ""
 
-    @FetchRequest(sortDescriptors: []) private var cars: FetchedResults<Car>
+    @FetchRequest(sortDescriptors: [], animation: .easeInOut)
+    private var cars: FetchedResults<Car>
+
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \ServiceRecord.date, ascending: false)]
-    ) private var allRecords: FetchedResults<ServiceRecord>
+        sortDescriptors: [NSSortDescriptor(keyPath: \ServiceRecord.date, ascending: false)],
+        animation: .easeInOut
+    )
+    private var allRecords: FetchedResults<ServiceRecord>
 
     @State private var predictions: [MaintenancePrediction] = []
     @State private var isAnalyzing = false
+    @State private var errorMessage: String = ""
 
     private var owner: String {
         userEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -30,17 +35,28 @@ struct SmartMaintenanceView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [.black, Color(hex: "#1A1A40")],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
+            LinearGradient(
+                colors: [.black, Color(hex: "#1A1A40")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     Text("🔮 Smart Maintenance AI")
                         .font(.system(size: 26, weight: .bold))
                         .foregroundColor(.white)
                         .glow(color: .cyan, radius: 10)
                         .padding(.top, 30)
+
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(.footnote)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                    }
 
                     if activeCar == nil {
                         emptyState(
@@ -51,15 +67,19 @@ struct SmartMaintenanceView: View {
                         carHeader
 
                         if isAnalyzing {
-                            Text("Analyzing your car data…")
-                                .foregroundColor(.white.opacity(0.6))
-                                .padding(.top, 6)
+                            HStack(spacing: 10) {
+                                ProgressView().tint(.cyan)
+                                Text("Analyzing your car data…")
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                            .padding(.top, 6)
                         }
 
                         if predictions.isEmpty && !isAnalyzing {
                             VStack(spacing: 10) {
                                 Text("No predictions yet.")
                                     .foregroundColor(.white.opacity(0.75))
+
                                 Text("Tap Analyze to generate predictions from service history.")
                                     .foregroundColor(.white.opacity(0.55))
                                     .font(.subheadline)
@@ -92,7 +112,6 @@ struct SmartMaintenanceView: View {
             }
         }
         .onAppear {
-            // авто-анализ только если есть сервисы
             if activeCar != nil, !recordsForActiveCar.isEmpty {
                 analyzeData()
             }
@@ -119,10 +138,24 @@ struct SmartMaintenanceView: View {
                 Image(systemName: iconForType(pred.type))
                     .foregroundColor(.cyan)
                     .font(.title3)
+
                 Text(pred.type)
                     .font(.headline)
                     .foregroundColor(.white)
+
                 Spacer()
+
+                Text("\(Int(pred.confidence * 100))%")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 8)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.cyan.opacity(0.25), lineWidth: 1)
+                    )
             }
 
             Text("Next service: \(format(pred.nextDate)) • ≈ \(pred.nextMileage) km")
@@ -131,6 +164,10 @@ struct SmartMaintenanceView: View {
 
             ProgressView(value: progress(for: pred))
                 .tint(.cyan)
+
+            Text(pred.basis == "history" ? "Based on your service history" : "Fallback estimate")
+                .foregroundColor(.white.opacity(0.5))
+                .font(.caption)
         }
         .padding()
         .background(Color.white.opacity(0.06))
@@ -157,19 +194,24 @@ struct SmartMaintenanceView: View {
     }
 
     private func analyzeData() {
+        errorMessage = ""
+
         guard let car = activeCar else { return }
+        guard !recordsForActiveCar.isEmpty else {
+            predictions = []
+            return
+        }
+
         isAnalyzing = true
 
-        // небольшой “UI smooth”
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: {
             predictions = AIMaintenanceEngine.shared.predictNextMaintenance(for: car, using: recordsForActiveCar)
             isAnalyzing = false
-        }
+        })
     }
 
     private func progress(for prediction: MaintenancePrediction) -> Double {
         let days = Calendar.current.dateComponents([.day], from: Date(), to: prediction.nextDate).day ?? 0
-        // чем меньше дней осталось — тем больше прогресс
         return 1.0 - min(max(Double(days) / 60.0, 0.0), 1.0)
     }
 
@@ -182,16 +224,16 @@ struct SmartMaintenanceView: View {
     private func iconForType(_ type: String) -> String {
         switch type.lowercased() {
         case "oil": return "oil.drop.fill"
-        case "brake", "brakes": return "car.rear.waves.up"
+        case "brakes", "brake": return "car.rear.waves.up"
         case "battery": return "bolt.car.fill"
-        case "tire", "tires": return "circle.grid.cross"
-        case "fluids": return "drop.fill"
+        case "tires", "tire": return "circle.grid.cross"
+        case "fluids", "fluid": return "drop.fill"
         default: return "wrench.and.screwdriver"
         }
     }
 }
 
-
 #Preview {
     SmartMaintenanceView()
+        .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }
