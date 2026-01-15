@@ -47,7 +47,13 @@ struct CarSelectionView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showSetup) {
+        .fullScreenCover(isPresented: $showSetup, onDismiss: {
+            // ✅ если пользователь закрыл setup без Save — откатим черновик
+            if selectedCarEntity != nil {
+                viewContext.rollback()
+                selectedCarEntity = nil
+            }
+        }) {
             if let car = selectedCarEntity {
                 CarSetupView(car: car, isEditing: false, setupCompleted: $hasSelectedCar)
                     .environment(\.managedObjectContext, viewContext)
@@ -56,7 +62,6 @@ struct CarSelectionView: View {
         .onAppear { loadCars() }
     }
 
-    // MARK: - Load all car images
     private func loadCars() {
         let names = [
             "Audi A4", "Audi Q5", "BMW X7", "BMWX5",
@@ -68,33 +73,30 @@ struct CarSelectionView: View {
         cars = names.map { CarModel(name: $0, imageName: $0) }
     }
 
-    // MARK: - Select car
+    // ✅ Select car: создаём DRAFT (без save) → открываем setup
     private func selectCar(_ model: CarModel) {
+        // UI подсветка
         selectedCar = model.name
 
+        // снимаем выделение со всех машин (в контексте)
         let fetch: NSFetchRequest<Car> = Car.fetchRequest()
         if let all = try? viewContext.fetch(fetch) {
             for c in all { c.isSelected = false }
         }
 
-        let newCar = Car(context: viewContext)
-        newCar.id = UUID()
-        newCar.name = model.name
-        newCar.imageName = model.imageName
-        newCar.isSelected = true
+        let draft = Car(context: viewContext)
+        draft.id = UUID()
+        draft.name = model.name
+        draft.imageName = model.imageName
+        draft.isSelected = true
 
-        do {
-            try viewContext.save()
+        // ❗️НЕ сохраняем здесь
 
-            selectedCarID = newCar.id?.uuidString ?? ""
-            selectedCarEntity = newCar
+        selectedCarID = draft.id?.uuidString ?? ""
+        selectedCarEntity = draft
 
-            hasSelectedCar = true        // ←🔥 ГЛАВНОЕ ДЛЯ ПЕРЕХОДА
-            showSetup = true             // ← переходим в заполнение машины
-
-        } catch {
-            print("❌ Error saving:", error)
-        }
+        hasSelectedCar = true
+        showSetup = true
     }
 }
 

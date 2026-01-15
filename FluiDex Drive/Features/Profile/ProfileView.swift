@@ -3,10 +3,12 @@ import CoreData
 
 struct ProfileView: View {
     @Environment(\.managedObjectContext) private var viewContext
+
     @AppStorage("selectedCar") private var selectedCar: String = ""
+    @AppStorage("selectedCarID") private var selectedCarID: String = ""
     @AppStorage("userName") private var userName: String = "User"
     @AppStorage("userEmail") private var userEmail: String = ""
-    
+
     @FetchRequest(
         sortDescriptors: [],
         predicate: nil,
@@ -18,12 +20,19 @@ struct ProfileView: View {
     @State private var tempName = ""
     @State private var tempEmail = ""
     @Binding var isLoggedIn: Bool
-    
+
     @State private var carToEdit: Car? = nil
+
+    // ✅ показываем только “валидные” машины (без пустых)
+    private var visibleCars: [Car] {
+        allCars.filter {
+            let name = ($0.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return !name.isEmpty
+        }
+    }
 
     var body: some View {
         ZStack {
-            // 🌌 Фон
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(hex: "#1A1A40")]),
                 startPoint: .topLeading,
@@ -33,41 +42,34 @@ struct ProfileView: View {
 
             ScrollView {
                 VStack(spacing: 25) {
-                    // 👤 Профиль
                     profileHeader
-
                     Divider().overlay(Color.white.opacity(0.3)).padding(.horizontal)
-
-                    // 🚗 Мой гараж
                     myGarageSection
-
                     Divider().overlay(Color.white.opacity(0.3)).padding(.horizontal)
-
                     logoutButton
                 }
             }
         }
-        // 👇 Все модификаторы находятся внутри body
         .onAppear {
             tempName = userName
             tempEmail = userEmail
+
+            // ✅ страховка: если активной машины больше нет — выберем другую или очистим
+            fixSelectionIfNeeded()
         }
         .sheet(isPresented: $showCarSelection) {
             CarSelectionView(hasSelectedCar: $showCarSelection)
                 .environment(\.managedObjectContext, viewContext)
         }
-
-
         .sheet(item: $carToEdit) { car in
             CarSetupView(car: car, isEditing: true, setupCompleted: .constant(false))
                 .environment(\.managedObjectContext, viewContext)
         }
     }
 
-    // MARK: 👤 Профиль
+    // MARK: Profile Header
     private var profileHeader: some View {
         VStack(spacing: 10) {
-            
             Image(systemName: "person.crop.circle.fill")
                 .resizable()
                 .scaledToFit()
@@ -100,7 +102,7 @@ struct ProfileView: View {
         .padding(.top, 40)
     }
 
-    // MARK: 🚗 Мой гараж
+    // MARK: My Garage
     private var myGarageSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -108,41 +110,43 @@ struct ProfileView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                 Spacer()
-                Button {
-                    showCarSelection.toggle()
-                } label: {
+                Button { showCarSelection.toggle() } label: {
                     Label("Add Car", systemImage: "plus.circle.fill")
                         .foregroundColor(Color(hex: "#FFD54F"))
                 }
             }
             .padding(.horizontal, 20)
 
-            if allCars.isEmpty {
+            if visibleCars.isEmpty {
                 Text("No cars added yet.")
                     .foregroundColor(.white.opacity(0.6))
                     .padding(.leading, 20)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
-                        ForEach(allCars) { car in
+                        ForEach(visibleCars) { car in
                             carCard(for: car)
                         }
                     }
                     .padding(.horizontal, 20)
                 }
 
-                if let activeCar = allCars.first(where: { $0.isSelected }) {
+                if let activeCar = visibleCars.first(where: { $0.isSelected }) {
                     garageSummarySection(for: activeCar)
                         .transition(.opacity.combined(with: .scale))
-                        .animation(.easeInOut(duration: 0.4), value: activeCar)
+                        .animation(.easeInOut(duration: 0.4), value: activeCar.objectID)
+                } else if let first = visibleCars.first {
+                    // ✅ если вдруг нет active — показываем первую и сразу делаем active
+                    garageSummarySection(for: first)
+                        .onAppear { setActiveCar(first) }
                 }
             }
         }
     }
 
-    // MARK: 🏎 Карточка машины
     private func carCard(for car: Car) -> some View {
         let isActive = car.isSelected
+
         return VStack(spacing: 8) {
             Image(car.imageName ?? "car.fill")
                 .resizable()
@@ -171,12 +175,9 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(isActive ? Color(hex: "#FFD54F") : .clear, lineWidth: 2)
         )
-        .onTapGesture {
-            setActiveCar(car)
-        }
+        .onTapGesture { setActiveCar(car) }
     }
 
-    // MARK: 📊 Панель “Garage Summary”
     @ViewBuilder
     private func garageSummarySection(for car: Car) -> some View {
         VStack(spacing: 10) {
@@ -186,21 +187,9 @@ struct ProfileView: View {
                 .padding(.top, 10)
 
             VStack(spacing: 12) {
-                HStack {
-                    Label("Year", systemImage: "calendar")
-                    Spacer()
-                    Text(car.year ?? "—")
-                }
-                HStack {
-                    Label("Fuel Type", systemImage: "fuelpump")
-                    Spacer()
-                    Text(car.fuelType ?? "—")
-                }
-                HStack {
-                    Label("Mileage", systemImage: "speedometer")
-                    Spacer()
-                    Text("\(car.mileage) km")
-                }
+                HStack { Label("Year", systemImage: "calendar"); Spacer(); Text(car.year ?? "—") }
+                HStack { Label("Fuel Type", systemImage: "fuelpump"); Spacer(); Text(car.fuelType ?? "—") }
+                HStack { Label("Mileage", systemImage: "speedometer"); Spacer(); Text("\(car.mileage) km") }
             }
             .font(.system(size: 15, weight: .medium))
             .foregroundColor(.white)
@@ -216,11 +205,8 @@ struct ProfileView: View {
             )
             .padding(.horizontal, 30)
 
-            // ✏️ и 🗑 кнопки
             HStack(spacing: 20) {
-                Button {
-                    editCarInfo(car)
-                } label: {
+                Button { editCarInfo(car) } label: {
                     Label("Edit Info", systemImage: "pencil.circle.fill")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.black)
@@ -231,9 +217,7 @@ struct ProfileView: View {
                         .shadow(color: .yellow.opacity(0.4), radius: 10, y: 5)
                 }
 
-                Button {
-                    deleteCar(car)
-                } label: {
+                Button { deleteCar(car) } label: {
                     Label("Delete", systemImage: "trash.fill")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
@@ -249,15 +233,18 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: 🚘 Сделать машину активной
+    // MARK: Active car
     private func setActiveCar(_ car: Car) {
-        for c in allCars { c.isSelected = false }
+        for c in visibleCars { c.isSelected = false }
         car.isSelected = true
+
         selectedCar = car.name ?? ""
+        selectedCarID = car.id?.uuidString ?? ""
+
         try? viewContext.save()
     }
 
-    // MARK: 🚪 Выход
+    // MARK: Logout
     private var logoutButton: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.4)) {
@@ -281,7 +268,7 @@ struct ProfileView: View {
         .padding(.bottom, 50)
     }
 
-    // MARK: ✏️ Сохранение профиля
+    // MARK: Save profile
     private func toggleEdit() {
         if isEditing {
             userName = tempName
@@ -292,22 +279,46 @@ struct ProfileView: View {
         }
         withAnimation { isEditing.toggle() }
     }
-    
-    // MARK: ✏️ Редактирование машины
+
     private func editCarInfo(_ car: Car) {
         carToEdit = car
-        print("✏️ Editing car: \(car.name ?? "Unknown")")
     }
 
-    // MARK: 🗑 Удаление машины
+    // ✅ Удаление машины: переключаем active или чистим AppStorage
     private func deleteCar(_ car: Car) {
+        let wasSelected = car.isSelected
+
         withAnimation {
             viewContext.delete(car)
             try? viewContext.save()
-            print("🗑 Deleted car: \(car.name ?? "Unknown")")
         }
-        if car.isSelected {
+
+        if wasSelected {
+            // после удаления выбираем другую как active
+            let remaining = visibleCars.filter { $0 != car }
+            if let next = remaining.first {
+                setActiveCar(next)
+            } else {
+                // машин больше нет → чистим выбор
+                selectedCar = ""
+                selectedCarID = ""
+                // если у тебя есть логика “setup completed” в AppEntryView — можно сбросить:
+                UserDefaults.standard.set(false, forKey: "setupCompleted")
+            }
+        }
+    }
+
+    // ✅ если selection сломался (удалили активную в другом месте)
+    private func fixSelectionIfNeeded() {
+        if visibleCars.isEmpty {
             selectedCar = ""
+            selectedCarID = ""
+            return
+        }
+
+        // если нет active — делаем первую active
+        if visibleCars.first(where: { $0.isSelected }) == nil, let first = visibleCars.first {
+            setActiveCar(first)
         }
     }
 }

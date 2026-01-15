@@ -28,8 +28,6 @@ struct CarSetupView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 25) {
-
-                // HEADER
                 VStack(spacing: 12) {
                     Image(car.imageName ?? "car.fill")
                         .resizable()
@@ -43,10 +41,10 @@ struct CarSetupView: View {
                 }
                 .padding(.top, 40)
 
-                // FORM
                 VStack(spacing: 18) {
                     glowingField("Year", text: $carYear, icon: "calendar")
                     glowingField("Mileage (km)", text: $carMileage, icon: "speedometer")
+                        .keyboardType(.numberPad)
                     glowingField("VIN (optional)", text: $carVIN, icon: "barcode.viewfinder")
 
                     Picker("Fuel Type", selection: $carFuelType) {
@@ -61,6 +59,9 @@ struct CarSetupView: View {
                 NeonButton(title: isEditing ? "Save" : "Save and Continue") {
                     saveCar()
                 }
+                // ✅ блокируем сохранение если пусто
+                .disabled(carYear.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || carFuelType.isEmpty)
+                .opacity(carYear.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.6 : 1)
                 .padding(.bottom, 30)
 
                 if showSavedMessage {
@@ -75,17 +76,26 @@ struct CarSetupView: View {
 
     private func loadCar() {
         carYear = car.year ?? ""
-        carMileage = String(car.mileage)
+        carMileage = car.mileage == 0 ? "" : String(car.mileage)
         carVIN = car.vin ?? ""
         carFuelType = car.fuelType ?? "Gasoline"
     }
 
     private func saveCar() {
-        car.year = carYear
+        let year = carYear.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !year.isEmpty else { return }
+
+        car.year = year
         car.mileage = Int32(carMileage) ?? 0
         car.vin = carVIN
         car.fuelType = carFuelType
         car.ownerEmail = userEmail
+
+        // ✅ делаем машину активной: снимаем активность с остальных
+        let fetch: NSFetchRequest<Car> = Car.fetchRequest()
+        if let all = try? viewContext.fetch(fetch) {
+            for c in all { c.isSelected = false }
+        }
         car.isSelected = true
 
         do {
@@ -95,20 +105,15 @@ struct CarSetupView: View {
             MaintenanceManager.shared.generateDefaultItems(for: car, in: viewContext)
 
             withAnimation { showSavedMessage = true }
-
-            withAnimation {
-                setupCompleted = true
-            }
+            withAnimation { setupCompleted = true }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 dismiss()
             }
-
         } catch {
             print("❌ Save error:", error)
         }
     }
-
 }
 
 #Preview {

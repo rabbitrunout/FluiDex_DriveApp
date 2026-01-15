@@ -15,6 +15,8 @@ struct MaintenanceScheduleView: View {
     // ✅ прогноз пробега (можно потом вынести в Settings)
     @AppStorage("avgKmPerDay") private var avgKmPerDay: Double = 40
 
+
+
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)],
         animation: .easeInOut

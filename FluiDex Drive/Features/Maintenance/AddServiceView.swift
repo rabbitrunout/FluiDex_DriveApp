@@ -6,33 +6,33 @@ struct AddServiceView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var tabBar: TabBarVisibility
 
-    // ✅ State должны инициализироваться через _state = State(...)
+    // ✅ важное: @State нужно инициализировать через _var = State(...)
     @State private var serviceType: String
     @State private var mileage: String
     @State private var date: Date
 
-    @State private var note = ""
-    @State private var costParts = ""
-    @State private var costLabor = ""
+    @State private var note: String = ""
+    @State private var costParts: String = ""
+    @State private var costLabor: String = ""
     @State private var totalCost: Double = 0
     @State private var showDatePicker = false
     @State private var isSaving = false
 
+    // ✅ optional связь с MaintenanceItem (когда быстрый лог из Schedule)
+    private let maintenanceItemID: NSManagedObjectID?
+
     let serviceTypes = ["Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
 
-    // ✅ Prefill (из Dashboard)
-    private let prefilledType: String?
-    private let prefilledMileage: Int32?
-    private let prefilledDate: Date?
-
-    init(prefilledType: String? = nil, prefilledMileage: Int32? = nil, prefilledDate: Date? = nil) {
-        self.prefilledType = prefilledType
-        self.prefilledMileage = prefilledMileage
-        self.prefilledDate = prefilledDate
-
+    init(
+        prefilledType: String? = nil,
+        prefilledMileage: Int32? = nil,
+        prefilledDate: Date? = nil,
+        maintenanceItemID: NSManagedObjectID? = nil
+    ) {
         _serviceType = State(initialValue: prefilledType ?? "Oil")
-        _mileage = State(initialValue: prefilledMileage.map { String($0) } ?? "")
+        _mileage = State(initialValue: String(prefilledMileage ?? 0))
         _date = State(initialValue: prefilledDate ?? Date())
+        self.maintenanceItemID = maintenanceItemID
     }
 
     var body: some View {
@@ -46,27 +46,20 @@ struct AddServiceView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
-
                     Text("Add New Service")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
                         .shadow(color: .cyan.opacity(0.6), radius: 8, y: 4)
                         .padding(.top, 20)
 
-                    // тип сервиса (твоя функция)
-                    glowingPicker(
-                        "Service Type",
-                        selection: $serviceType,
-                        options: serviceTypes,
-                        icon: "gearshape.fill"
-                    )
-                    .padding(.horizontal)
+                    // ❗️Оставь свой UI выбора типа (chips/sheet). Тут просто пример:
+                    // serviceTypeChips ...
 
                     glowingField("Mileage (km)", text: $mileage, icon: "speedometer")
                         .keyboardType(.numberPad)
                         .padding(.horizontal)
 
-                    // Date
+                    // Date picker (твоя версия норм)
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Date")
                             .font(.headline)
@@ -99,13 +92,11 @@ struct AddServiceView: View {
                                 .onChange(of: date) { _, _ in
                                     withAnimation(.spring()) { showDatePicker = false }
                                 }
-                                .transition(.opacity.combined(with: .slide))
                                 .padding(.horizontal, 10)
                         }
                     }
                     .padding(.horizontal)
 
-                    // Costs
                     glowingField("Parts Cost ($)", text: $costParts, icon: "wrench.fill")
                         .onChange(of: costParts) { _, _ in recalcTotal() }
                         .padding(.horizontal)
@@ -115,7 +106,7 @@ struct AddServiceView: View {
                         .padding(.horizontal)
 
                     HStack {
-                        Text("Total: ")
+                        Text("Total:")
                             .foregroundColor(.white)
                         Spacer()
                         Text("$\(totalCost, specifier: "%.2f")")
@@ -127,10 +118,7 @@ struct AddServiceView: View {
                     glowingField("Note (optional)", text: $note, icon: "pencil")
                         .padding(.horizontal)
 
-                    // Save
-                    Button {
-                        saveService()
-                    } label: {
+                    Button { saveService() } label: {
                         HStack {
                             Image(systemName: isSaving ? "hourglass" : "checkmark.circle.fill")
                                 .font(.system(size: 22, weight: .bold))
@@ -149,10 +137,7 @@ struct AddServiceView: View {
                 }
             }
         }
-        .onAppear {
-            withAnimation { tabBar.isVisible = false }
-            recalcTotal()
-        }
+        .onAppear { withAnimation { tabBar.isVisible = false } }
         .onDisappear { withAnimation { tabBar.isVisible = true } }
     }
 
@@ -163,21 +148,47 @@ struct AddServiceView: View {
     private func saveService() {
         isSaving = true
 
+        let enteredMileage = Int32(mileage) ?? 0
+
+        // 1) создаём ServiceRecord
         let newRecord = ServiceRecord(context: viewContext)
         newRecord.id = UUID()
         newRecord.type = serviceType
-        newRecord.mileage = Int32(mileage) ?? 0
+        newRecord.mileage = enteredMileage
         newRecord.date = date
         newRecord.note = note
 
-        // TODO: можно связать это с MaintenanceRules позже
-        newRecord.nextServiceKm = Int32((Int(mileage) ?? 0) + 10000)
+        // базовые дефолты (можешь позже улучшить под типы)
+        newRecord.nextServiceKm = enteredMileage + 10000
         newRecord.nextServiceDate = Calendar.current.date(byAdding: .day, value: 180, to: date)
 
+        // link car
         let fetch: NSFetchRequest<Car> = Car.fetchRequest()
         fetch.predicate = NSPredicate(format: "isSelected == true")
-        if let activeCar = try? viewContext.fetch(fetch).first {
-            newRecord.car = activeCar
+        let activeCar = (try? viewContext.fetch(fetch).first)
+        newRecord.car = activeCar
+
+        // 2) если мы пришли из MaintenanceSchedule → обновляем именно тот MaintenanceItem
+        if let id = maintenanceItemID,
+           let item = try? viewContext.existingObject(with: id) as? MaintenanceItem {
+
+            item.lastChangeDate = date
+            item.lastChangeMileage = enteredMileage
+
+            // next mileage/date считаем от интервалов
+            let kmInterval = item.intervalKm
+            let daysInterval = item.intervalDays
+
+            if kmInterval > 0 {
+                item.nextChangeMileage = enteredMileage + kmInterval
+            }
+
+            if daysInterval > 0 {
+                item.nextChangeDate = Calendar.current.date(byAdding: .day, value: Int(daysInterval), to: date)
+            } else {
+                // fallback если intervalDays = 0
+                item.nextChangeDate = Calendar.current.date(byAdding: .day, value: 180, to: date)
+            }
         }
 
         do {
@@ -191,6 +202,7 @@ struct AddServiceView: View {
         isSaving = false
     }
 }
+
 
 #Preview {
     AddServiceView(prefilledType: "Oil", prefilledMileage: 40000, prefilledDate: .now)
