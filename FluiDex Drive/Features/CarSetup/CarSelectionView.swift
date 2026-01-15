@@ -13,6 +13,7 @@ struct CarSelectionView: View {
 
     @AppStorage("selectedCar") private var selectedCar: String = ""
     @AppStorage("selectedCarID") private var selectedCarID: String = ""
+    @AppStorage("userEmail") private var userEmail: String = ""
 
     @State private var showSetup = false
     @State private var selectedCarEntity: Car? = nil
@@ -47,13 +48,7 @@ struct CarSelectionView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showSetup, onDismiss: {
-            // ✅ если пользователь закрыл setup без Save — откатим черновик
-            if selectedCarEntity != nil {
-                viewContext.rollback()
-                selectedCarEntity = nil
-            }
-        }) {
+        .fullScreenCover(isPresented: $showSetup) {
             if let car = selectedCarEntity {
                 CarSetupView(car: car, isEditing: false, setupCompleted: $hasSelectedCar)
                     .environment(\.managedObjectContext, viewContext)
@@ -73,30 +68,52 @@ struct CarSelectionView: View {
         cars = names.map { CarModel(name: $0, imageName: $0) }
     }
 
-    // ✅ Select car: создаём DRAFT (без save) → открываем setup
     private func selectCar(_ model: CarModel) {
-        // UI подсветка
-        selectedCar = model.name
-
-        // снимаем выделение со всех машин (в контексте)
-        let fetch: NSFetchRequest<Car> = Car.fetchRequest()
-        if let all = try? viewContext.fetch(fetch) {
-            for c in all { c.isSelected = false }
+        let owner = userEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !owner.isEmpty else {
+            print("❌ userEmail empty — cannot assign car to owner")
+            return
         }
 
-        let draft = Car(context: viewContext)
-        draft.id = UUID()
-        draft.name = model.name
-        draft.imageName = model.imageName
-        draft.isSelected = true
+        // 1) снимаем active у всех машин ТЕКУЩЕГО пользователя
+        let fetchAll: NSFetchRequest<Car> = Car.fetchRequest()
+        fetchAll.predicate = NSPredicate(format: "ownerEmail == %@", owner)
+        let userCars = (try? viewContext.fetch(fetchAll)) ?? []
+        for c in userCars { c.isSelected = false }
 
-        // ❗️НЕ сохраняем здесь
+        // 2) если такая машина уже есть у пользователя — используем её (не создаём дубль)
+        let fetchExisting: NSFetchRequest<Car> = Car.fetchRequest()
+        fetchExisting.fetchLimit = 1
+        fetchExisting.predicate = NSPredicate(format: "ownerEmail == %@ AND name == %@", owner, model.name)
+        let existing = (try? viewContext.fetch(fetchExisting))?.first
 
-        selectedCarID = draft.id?.uuidString ?? ""
-        selectedCarEntity = draft
+        let carEntity: Car
+        if let existing {
+            carEntity = existing
+        } else {
+            let newCar = Car(context: viewContext)
+            newCar.id = UUID()
+            newCar.name = model.name
+            newCar.imageName = model.imageName
+            newCar.ownerEmail = owner
+            carEntity = newCar
+        }
 
-        hasSelectedCar = true
-        showSetup = true
+        carEntity.isSelected = true
+
+        do {
+            try viewContext.save()
+
+            selectedCar = carEntity.name ?? model.name
+            selectedCarID = carEntity.id?.uuidString ?? ""
+            selectedCarEntity = carEntity
+
+            hasSelectedCar = true
+            showSetup = true
+
+        } catch {
+            print("❌ Error saving:", error)
+        }
     }
 }
 

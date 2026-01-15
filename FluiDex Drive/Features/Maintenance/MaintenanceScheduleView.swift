@@ -3,7 +3,6 @@ import CoreData
 
 struct MaintenanceScheduleView: View {
 
-    // ✅ чтобы открывать фокус при переходе
     let focusItem: MaintenanceItem?
     init(focusItem: MaintenanceItem? = nil) {
         self.focusItem = focusItem
@@ -12,24 +11,23 @@ struct MaintenanceScheduleView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var tabBar: TabBarVisibility
 
-    // ✅ прогноз пробега (можно потом вынести в Settings)
     @AppStorage("avgKmPerDay") private var avgKmPerDay: Double = 40
+    @AppStorage("userEmail") private var userEmail: String = ""        // ✅ NEW
 
-
-
+    // ✅ Можно fetch-ить все items, а фильтровать по active car
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \MaintenanceItem.nextChangeDate, ascending: true)],
         animation: .easeInOut
     ) private var items: FetchedResults<MaintenanceItem>
 
+    // ✅ ВАЖНО: активная машина только текущего пользователя
     @FetchRequest(
         sortDescriptors: [],
-        predicate: NSPredicate(format: "isSelected == true")
+        predicate: NSPredicate(format: "isSelected == true AND ownerEmail == %@", (UserDefaults.standard.string(forKey: "userEmail") ?? "").lowercased())
     ) private var selectedCar: FetchedResults<Car>
 
     @State private var showAddItem = false
 
-    // ✅ quick log
     @State private var quickLogItem: MaintenanceItem? = nil
     @State private var showQuickLog = false
 
@@ -74,25 +72,27 @@ struct MaintenanceScheduleView: View {
             .sorted { ($0.nextChangeDate ?? .distantFuture) < ($1.nextChangeDate ?? .distantFuture) }
     }
 
+    // ✅ Показываем только items активной машины текущего пользователя
     private var filteredItems: [MaintenanceItem] {
-        guard let car = selectedCar.first else { return Array(items) }
+        guard let car = selectedCar.first else { return [] }
 
+        // 1) только для этой машины
+        let carItems = items.filter { $0.car == car }
+
+        // 2) правила по fuelType
         let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
-        let all = allowed.isEmpty ? Array(items) : items.filter { allowed.contains($0.title ?? "") }
+        let all = allowed.isEmpty ? carItems : carItems.filter { allowed.contains($0.title ?? "") }
+
         return removeDuplicates(all)
     }
 
-    // MARK: - ✅ Due mileage helpers (CoreData new fields)
+    // MARK: - ✅ Due mileage helpers
 
-    /// гарантирует, что у айтема есть nextChangeMileage (если можно вычислить)
     private func resolvedNextMileage(for item: MaintenanceItem) -> Int32 {
         if item.nextChangeMileage > 0 { return item.nextChangeMileage }
-
-        // если nextChangeMileage ещё не проставили в старых данных — попробуем вычислить:
         if item.lastChangeMileage > 0 && item.intervalKm > 0 {
             return item.lastChangeMileage + item.intervalKm
         }
-
         return 0
     }
 
@@ -113,18 +113,14 @@ struct MaintenanceScheduleView: View {
     private func unifiedUrgency(item: MaintenanceItem, carMileage: Int32) -> (color: Color, label: String) {
         let d = daysUntil(item.nextChangeDate)
 
-        // mileage overdue?
         let dueMileage = resolvedNextMileage(for: item)
         let overdueByMileage = (dueMileage > 0) && (carMileage >= dueMileage)
-
-        // date overdue?
         let overdueByDate = d < 0
 
         if overdueByMileage || overdueByDate {
             return (.red, "overdue")
         }
 
-        // если есть dueMileage — можно оценить “по пробегу” приблизительные дни
         if dueMileage > 0 {
             let remain = max(0, Int(kmRemaining(item: item, carMileage: carMileage)))
             let estDaysByKm = avgKmPerDay > 0 ? Int(ceil(Double(remain) / avgKmPerDay)) : 9999
@@ -136,14 +132,13 @@ struct MaintenanceScheduleView: View {
             return (.green, "in \(effectiveDays)d")
         }
 
-        // fallback только по дате
         if d == 0 { return (.orange, "today") }
         if d <= 2 { return (.orange, "in \(d)d") }
         if d <= 7 { return (.yellow, "in \(d)d") }
         return (.green, "in \(d)d")
     }
 
-    // MARK: - ✅ mapping Maintenance → Service type for AddServiceView
+    // MARK: - ✅ Maintenance → Service type
 
     private func serviceTypeForMaintenance(_ item: MaintenanceItem) -> String {
         let title = (item.title ?? "").lowercased()
@@ -178,7 +173,11 @@ struct MaintenanceScheduleView: View {
                     .shadow(color: .cyan.opacity(0.7), radius: 12)
                     .padding(.top, 40)
 
-                if filteredItems.isEmpty {
+                if selectedCar.first == nil {
+                    Text("No car selected.")
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.top, 40)
+                } else if filteredItems.isEmpty {
                     Text("No maintenance tasks for this vehicle type.")
                         .foregroundColor(.white.opacity(0.6))
                         .padding(.top, 40)
@@ -211,15 +210,15 @@ struct MaintenanceScheduleView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationBarBackButtonHidden(false)
 
-        // ✅ Быстрый AddService с предзаполнением
+        // ✅ Quick Log: теперь привязан к конкретному MaintenanceItem
         .sheet(isPresented: $showQuickLog) {
             if let item = quickLogItem {
                 AddServiceView(
                     prefilledType: serviceTypeForMaintenance(item),
                     prefilledMileage: selectedCar.first?.mileage ?? 0,
-                    prefilledDate: Date()
+                    prefilledDate: Date(),
+                    maintenanceItemID: item.objectID          // ✅ ВАЖНО
                 )
                 .environment(\.managedObjectContext, viewContext)
                 .environmentObject(tabBar)
@@ -238,11 +237,8 @@ struct MaintenanceScheduleView: View {
         return HStack(alignment: .top, spacing: 12) {
 
             VStack(alignment: .leading, spacing: 8) {
-
                 HStack {
-                    Circle()
-                        .fill(u.color)
-                        .frame(width: 10, height: 10)
+                    Circle().fill(u.color).frame(width: 10, height: 10)
 
                     Text(item.title ?? "Unknown")
                         .font(.headline)
@@ -255,27 +251,24 @@ struct MaintenanceScheduleView: View {
                         .foregroundColor(.cyan)
                 }
 
-                // ✅ date line
                 Text("Next change: \(formatDate(item.nextChangeDate))")
                     .foregroundColor(u.color == .green ? Color(hex: "#FFD54F") : u.color)
                     .font(.subheadline)
 
-                // ✅ NEW: due mileage line (если есть)
                 if dueMileage > 0 {
                     Text("Due at: \(formatKm(dueMileage)) km")
                         .foregroundColor(u.color == .green ? .white.opacity(0.8) : u.color.opacity(0.95))
                         .font(.caption)
-                }
 
-                // ✅ NEW: remaining km (если есть)
-                if dueMileage > 0 {
-                    let txt = remainKm >= 0 ? "Remaining: \(formatKm(remainKm)) km" : "Over by: \(formatKm(abs(remainKm))) km"
+                    let txt = remainKm >= 0
+                        ? "Remaining: \(formatKm(remainKm)) km"
+                        : "Over by: \(formatKm(abs(remainKm))) km"
+
                     Text(txt)
                         .foregroundColor(u.color == .green ? .white.opacity(0.55) : u.color.opacity(0.85))
                         .font(.caption)
                 }
 
-                // ✅ NEW: estimate mileage at date
                 Text("Est. mileage (at date): \(formatKm(estKmAtDate)) km")
                     .foregroundColor(.white.opacity(0.5))
                     .font(.caption)
@@ -286,7 +279,6 @@ struct MaintenanceScheduleView: View {
                         .font(.caption)
                 }
 
-                // interval summary
                 HStack(spacing: 10) {
                     if item.intervalDays > 0 {
                         Text("Interval: \(item.intervalDays)d")
@@ -303,7 +295,6 @@ struct MaintenanceScheduleView: View {
 
             Spacer()
 
-            // ✅ urgency badge right
             Text(u.label)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.white.opacity(0.9))

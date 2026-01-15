@@ -6,7 +6,8 @@ struct AddServiceView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var tabBar: TabBarVisibility
 
-    // ✅ важное: @State нужно инициализировать через _var = State(...)
+    @AppStorage("userEmail") private var currentUserEmail: String = ""   // ✅ NEW
+
     @State private var serviceType: String
     @State private var mileage: String
     @State private var date: Date
@@ -17,8 +18,9 @@ struct AddServiceView: View {
     @State private var totalCost: Double = 0
     @State private var showDatePicker = false
     @State private var isSaving = false
+    @State private var errorMessage: String = ""                         // ✅ NEW
 
-    // ✅ optional связь с MaintenanceItem (когда быстрый лог из Schedule)
+    // optional связь с MaintenanceItem
     private let maintenanceItemID: NSManagedObjectID?
 
     let serviceTypes = ["Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
@@ -52,14 +54,20 @@ struct AddServiceView: View {
                         .shadow(color: .cyan.opacity(0.6), radius: 8, y: 4)
                         .padding(.top, 20)
 
-                    // ❗️Оставь свой UI выбора типа (chips/sheet). Тут просто пример:
-                    // serviceTypeChips ...
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(.footnote)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
 
+                    // mileage
                     glowingField("Mileage (km)", text: $mileage, icon: "speedometer")
                         .keyboardType(.numberPad)
                         .padding(.horizontal)
 
-                    // Date picker (твоя версия норм)
+                    // date
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Date")
                             .font(.headline)
@@ -132,6 +140,7 @@ struct AddServiceView: View {
                         .cornerRadius(30)
                         .shadow(color: Color.yellow.opacity(0.4), radius: 10, y: 6)
                     }
+                    .disabled(isSaving)
                     .padding(.horizontal, 60)
                     .padding(.bottom, 40)
                 }
@@ -145,10 +154,45 @@ struct AddServiceView: View {
         totalCost = (Double(costParts) ?? 0) + (Double(costLabor) ?? 0)
     }
 
+    // ✅ fetch current user
+    private func fetchCurrentUser() -> User? {
+        let owner = currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !owner.isEmpty else { return nil }
+
+        let req: NSFetchRequest<User> = User.fetchRequest()
+        req.fetchLimit = 1
+        req.predicate = NSPredicate(format: "email == %@", owner)
+        return try? viewContext.fetch(req).first
+    }
+
+    // ✅ fetch active car ONLY for current owner
+    private func fetchActiveCarForOwner() -> Car? {
+        let owner = currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !owner.isEmpty else { return nil }
+
+        let req: NSFetchRequest<Car> = Car.fetchRequest()
+        req.fetchLimit = 1
+        req.predicate = NSPredicate(format: "isSelected == true AND ownerEmail == %@", owner)
+        return try? viewContext.fetch(req).first
+    }
+
     private func saveService() {
+        errorMessage = ""
         isSaving = true
 
+        defer { isSaving = false }
+
         let enteredMileage = Int32(mileage) ?? 0
+
+        guard let activeCar = fetchActiveCarForOwner() else {
+            errorMessage = "No active car for this account. Please select a car first."
+            return
+        }
+
+        guard let currentUser = fetchCurrentUser() else {
+            errorMessage = "User session not found. Please log in again."
+            return
+        }
 
         // 1) создаём ServiceRecord
         let newRecord = ServiceRecord(context: viewContext)
@@ -158,24 +202,27 @@ struct AddServiceView: View {
         newRecord.date = date
         newRecord.note = note
 
-        // базовые дефолты (можешь позже улучшить под типы)
+        // next service defaults
         newRecord.nextServiceKm = enteredMileage + 10000
         newRecord.nextServiceDate = Calendar.current.date(byAdding: .day, value: 180, to: date)
 
-        // link car
-        let fetch: NSFetchRequest<Car> = Car.fetchRequest()
-        fetch.predicate = NSPredicate(format: "isSelected == true")
-        let activeCar = (try? viewContext.fetch(fetch).first)
+        // ✅ attach relations
         newRecord.car = activeCar
+        newRecord.user = currentUser   // ✅ IMPORTANT (по модели User.services)
 
-        // 2) если мы пришли из MaintenanceSchedule → обновляем именно тот MaintenanceItem
+        // 2) если пришли из schedule → обновляем конкретный MaintenanceItem
         if let id = maintenanceItemID,
            let item = try? viewContext.existingObject(with: id) as? MaintenanceItem {
+
+            // ✅ safety: обновляем только если item принадлежит активной машине
+            if item.car != activeCar {
+                errorMessage = "This maintenance item belongs to another car. Please open schedule for the current car."
+                return
+            }
 
             item.lastChangeDate = date
             item.lastChangeMileage = enteredMileage
 
-            // next mileage/date считаем от интервалов
             let kmInterval = item.intervalKm
             let daysInterval = item.intervalDays
 
@@ -186,7 +233,6 @@ struct AddServiceView: View {
             if daysInterval > 0 {
                 item.nextChangeDate = Calendar.current.date(byAdding: .day, value: Int(daysInterval), to: date)
             } else {
-                // fallback если intervalDays = 0
                 item.nextChangeDate = Calendar.current.date(byAdding: .day, value: 180, to: date)
             }
         }
@@ -196,13 +242,11 @@ struct AddServiceView: View {
             FirebaseSyncManager.shared.syncServiceRecord(newRecord)
             dismiss()
         } catch {
-            print("❌ Error saving service: \(error.localizedDescription)")
+            errorMessage = "Error saving service: \(error.localizedDescription)"
+            print("❌ Error saving service:", error)
         }
-
-        isSaving = false
     }
 }
-
 
 #Preview {
     AddServiceView(prefilledType: "Oil", prefilledMileage: 40000, prefilledDate: .now)

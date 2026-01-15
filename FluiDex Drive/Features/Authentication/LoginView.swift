@@ -33,6 +33,10 @@ struct LoginView: View {
 
                 VStack(spacing: 18) {
                     glowingField("Email", text: $email, icon: "envelope.fill")
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
                     GlowingSecureField(placeholder: "Password", icon: "lock.fill", text: $password)
                 }
                 .padding(.horizontal, 35)
@@ -50,9 +54,7 @@ struct LoginView: View {
                 }
                 .padding(.top, 25)
 
-                Button {
-                    showForgotPassword = true
-                } label: {
+                Button { showForgotPassword = true } label: {
                     Text("Forgot Password?")
                         .foregroundColor(Color(hex: "#FFD54F"))
                         .font(.footnote)
@@ -81,46 +83,79 @@ struct LoginView: View {
         }
     }
 
-    // MARK: 💾 Авторизация пользователя
     private func logInUser() {
         errorMessage = ""
 
-        guard !email.isEmpty, !password.isEmpty else {
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanPassword = password
+
+        guard !cleanEmail.isEmpty, !cleanPassword.isEmpty else {
             errorMessage = "Please fill in all fields"
             return
         }
 
+        // ✅ reset session
+        UserDefaults.standard.removeObject(forKey: "selectedCar")
+        UserDefaults.standard.removeObject(forKey: "selectedCarID")
+        UserDefaults.standard.set(false, forKey: "hasSelectedCar")
+        UserDefaults.standard.set(false, forKey: "setupCompleted")
+        hasSelectedCar = false
+
         let request: NSFetchRequest<User> = User.fetchRequest()
-        request.predicate = NSPredicate(format: "email == %@ AND password == %@", email.lowercased(), password)
+        request.fetchLimit = 1
+        request.predicate = NSPredicate(format: "email == %@ AND password == %@", cleanEmail, cleanPassword)
 
         do {
-            if let user = try viewContext.fetch(request).first {
-                // ✅ Сохраняем данные пользователя
-                UserDefaults.standard.set(user.name, forKey: "userName")
-                UserDefaults.standard.set(user.email, forKey: "userEmail")
-                UserDefaults.standard.set(true, forKey: "isLoggedIn")
-
-                // 🚗 Проверяем, есть ли выбранная машина
-                let carFetch: NSFetchRequest<Car> = Car.fetchRequest()
-                carFetch.predicate = NSPredicate(format: "isSelected == true")
-                let selectedCars = try viewContext.fetch(carFetch)
-
-                if let car = selectedCars.first {
-                    UserDefaults.standard.set(car.id?.uuidString, forKey: "selectedCarID")
-                    hasSelectedCar = true
-                } else {
-                    hasSelectedCar = false
-                }
-
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    isLoggedIn = true
-                    showLogin = false
-                }
-            } else {
+            guard let user = try viewContext.fetch(request).first else {
                 errorMessage = "Invalid email or password"
+                return
             }
+
+            let owner = (user.email ?? cleanEmail).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+            UserDefaults.standard.set(user.name ?? "User", forKey: "userName")
+            UserDefaults.standard.set(owner, forKey: "userEmail")
+            UserDefaults.standard.set(true, forKey: "isLoggedIn")
+
+            // ✅ fetch only THIS user's cars
+            let carFetch: NSFetchRequest<Car> = Car.fetchRequest()
+            carFetch.predicate = NSPredicate(format: "ownerEmail == %@", owner)
+            let userCars = try viewContext.fetch(carFetch)
+
+            let selected = userCars.filter { $0.isSelected }
+            if let active = selected.first ?? userCars.first {
+                userCars.forEach { $0.isSelected = false }
+                active.isSelected = true
+                try? viewContext.save()
+
+                UserDefaults.standard.set(active.name ?? "", forKey: "selectedCar")
+                UserDefaults.standard.set(active.id?.uuidString ?? "", forKey: "selectedCarID")
+                UserDefaults.standard.set(true, forKey: "hasSelectedCar")
+                UserDefaults.standard.set(true, forKey: "setupCompleted")
+                hasSelectedCar = true
+            } else {
+                UserDefaults.standard.set(false, forKey: "hasSelectedCar")
+                UserDefaults.standard.set(false, forKey: "setupCompleted")
+                hasSelectedCar = false
+            }
+
+            withAnimation(.easeInOut(duration: 0.4)) {
+                isLoggedIn = true
+                showLogin = false
+            }
+
         } catch {
             errorMessage = "Login error: \(error.localizedDescription)"
         }
     }
+}
+
+#Preview {
+    LoginView(
+        isLoggedIn: .constant(false),
+        hasSelectedCar: .constant(false),
+        showRegister: .constant(false),
+        showLogin: .constant(true)
+    )
+    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
 }

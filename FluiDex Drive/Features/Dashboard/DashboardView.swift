@@ -4,26 +4,38 @@ import Foundation
 
 struct DashboardView: View {
     @Environment(\.managedObjectContext) private var viewContext
+
     @AppStorage("userName") private var currentUserName: String = "Guest"
+    @AppStorage("userEmail") private var currentUserEmail: String = ""
 
     @State private var showProfile = false
     @State private var showAddService = false
-
-    // быстрый лог, когда нажали Next Service
     @State private var showQuickServiceLog = false
-
     @State private var carOpacity: CGFloat = 0
     @State private var selectedMaintenance: MaintenanceItem? = nil
 
-    // MARK: - CoreData
-    @FetchRequest(
-        sortDescriptors: [],
-        predicate: NSPredicate(format: "isSelected == true")
-    ) private var selectedCar: FetchedResults<Car>
+    // ✅ Fetch ALL cars once, filter locally
+    @FetchRequest(sortDescriptors: [], predicate: nil, animation: .easeInOut)
+    private var allCars: FetchedResults<Car>
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \ServiceRecord.date, ascending: false)]
     ) private var allRecords: FetchedResults<ServiceRecord>
+
+    private var owner: String {
+        currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    // ✅ cars only for this user
+    private var userCars: [Car] {
+        guard !owner.isEmpty else { return [] }
+        return allCars.filter { ($0.ownerEmail ?? "").lowercased() == owner }
+    }
+
+    // ✅ active car only for this user
+    private var activeCar: Car? {
+        userCars.first(where: { $0.isSelected })
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -61,8 +73,7 @@ struct DashboardView: View {
                             prefilledMileage: nil,
                             prefilledDate: nil
                         )
-
-                            .environment(\.managedObjectContext, viewContext)
+                        .environment(\.managedObjectContext, viewContext)
                     }
 
                     Spacer(minLength: 50)
@@ -73,26 +84,58 @@ struct DashboardView: View {
                 .padding(.trailing, 18)
                 .padding(.top, 18)
         }
+        .onAppear {
+            fixActiveCarIfNeeded()
+        }
+        .onChange(of: currentUserEmail) { _, _ in
+            fixActiveCarIfNeeded()
+        }
         .sheet(isPresented: $showProfile) {
             ProfileView(isLoggedIn: .constant(true))
                 .environment(\.managedObjectContext, viewContext)
         }
-
-        // ✅ тап по maintenance alert → открываем schedule + фокус
         .sheet(item: $selectedMaintenance) { item in
             MaintenanceScheduleView(focusItem: item)
                 .environment(\.managedObjectContext, viewContext)
         }
-
-        // ✅ тап по Next Service → быстрый лог сервиса (prefilled AddServiceView)
         .sheet(isPresented: $showQuickServiceLog) {
             AddServiceView(
                 prefilledType: "Oil",
-                prefilledMileage: selectedCar.first?.mileage ?? 0,
+                prefilledMileage: activeCar?.mileage ?? 0,
                 prefilledDate: Date()
             )
             .environment(\.managedObjectContext, viewContext)
         }
+    }
+
+    // ✅ IMPORTANT: make selection consistent (and global unique isSelected)
+    private func fixActiveCarIfNeeded() {
+        guard !owner.isEmpty else { return }
+
+        // If user has no cars -> nothing to select
+        guard !userCars.isEmpty else {
+            carOpacity = 0
+            return
+        }
+
+        // If this user has active car -> OK
+        if activeCar != nil {
+            carOpacity = 0
+            return
+        }
+
+        // Otherwise pick first car for this user and make it globally active
+        setGlobalActiveCar(userCars.first!)
+    }
+
+    private func setGlobalActiveCar(_ car: Car) {
+        // ✅ key fix: only ONE isSelected in whole DB (because AddServiceView uses isSelected == true)
+        for c in allCars { c.isSelected = false }
+        car.isSelected = true
+        try? viewContext.save()
+
+        // reset car animation
+        carOpacity = 0
     }
 
     // MARK: - Profile badge
@@ -119,7 +162,7 @@ struct DashboardView: View {
     // MARK: - Car header
     private var carBlock: some View {
         VStack(spacing: 12) {
-            if let car = selectedCar.first {
+            if let car = activeCar {
                 ZStack {
                     Circle()
                         .fill(Color.cyan.opacity(0.22))
@@ -142,37 +185,44 @@ struct DashboardView: View {
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(.white)
 
-                // ✅ car.year = String
                 Text("\(car.year ?? "—") • \(car.mileage) km")
                     .foregroundColor(.white.opacity(0.7))
 
             } else {
-                Text("No car selected")
-                    .foregroundColor(.white.opacity(0.6))
+                VStack(spacing: 10) {
+                    Text("No car selected")
+                        .foregroundColor(.white.opacity(0.85))
+                        .font(.title3.weight(.bold))
+
+                    Text("Add your first car to start tracking maintenance.")
+                        .foregroundColor(.white.opacity(0.6))
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 30)
+                }
+                .padding(.top, 10)
             }
         }
     }
 
-    // MARK: - Next Service (кликабельно + badge срочности + красная рамка)
+    // MARK: - Next Service
     private var nextServiceCard: some View {
         Group {
-            if let car = selectedCar.first,
+            if let car = activeCar,
                let next = getNextService(for: car) {
 
-                let badge = nextServiceBadge(nextDate: next.date,
-                                             dueMileage: next.mileage,
-                                             currentMileage: car.mileage)
+                let badge = nextServiceBadge(
+                    nextDate: next.date,
+                    dueMileage: next.mileage,
+                    currentMileage: car.mileage
+                )
 
-                Button {
-                    showQuickServiceLog = true
-                } label: {
+                Button { showQuickServiceLog = true } label: {
                     VStack(spacing: 10) {
                         HStack {
                             Text("Next Service Due:")
                                 .foregroundColor(.white.opacity(0.7))
-
                             Spacer()
-
                             urgencyPill(text: badge.text, color: badge.color)
                         }
 
@@ -197,9 +247,7 @@ struct DashboardView: View {
 
     private func urgencyPill(text: String, color: Color) -> some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
+            Circle().fill(color).frame(width: 8, height: 8)
             Text(text)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.white.opacity(0.9))
@@ -208,22 +256,15 @@ struct DashboardView: View {
         .padding(.horizontal, 10)
         .background(Color.white.opacity(0.06))
         .cornerRadius(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(color.opacity(0.45), lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(color.opacity(0.45), lineWidth: 1))
     }
 
-    /// ✅ одна логика “overdue”: по дате ИЛИ по пробегу
     private func nextServiceBadge(nextDate: Date, dueMileage: Int32, currentMileage: Int32) -> (text: String, color: Color) {
         let overdueByMileage = currentMileage >= dueMileage
-
         let days = Calendar.current.dateComponents([.day], from: Date(), to: nextDate).day ?? 999
         let overdueByDate = days < 0
 
-        if overdueByMileage || overdueByDate {
-            return ("overdue", .red)
-        }
+        if overdueByMileage || overdueByDate { return ("overdue", .red) }
         if days <= 2 { return ("in \(days)d", .orange) }
         if days <= 7 { return ("in \(days)d", .yellow) }
         return ("in \(days)d", .green)
@@ -236,7 +277,7 @@ struct DashboardView: View {
                 .foregroundColor(.white)
                 .padding(.leading, 20)
 
-            let items = recentServices(for: selectedCar.first)
+            let items = recentServices(for: activeCar)
 
             if items.isEmpty {
                 Text("No records yet.")
@@ -266,10 +307,9 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Maintenance (одна карточка, без дублей)
+    // MARK: - Maintenance
     private var maintenanceCard: some View {
-        // ✅ заранее считаем, чтобы компилятор не “умирал”
-        let car = selectedCar.first
+        let car = activeCar
         let urgent: [MaintenanceItem] = car.map { urgentMaintenance(for: $0) } ?? []
         let urgentCount = urgent.count
         let urgentPreview = Array(urgent.prefix(2))
@@ -312,14 +352,9 @@ struct DashboardView: View {
                 } else {
                     VStack(spacing: 10) {
                         ForEach(urgentPreview, id: \.objectID) { item in
-                            Button {
-                                selectedMaintenance = item
-                            } label: {
+                            Button { selectedMaintenance = item } label: {
                                 HStack(spacing: 10) {
-                                    Circle()
-                                        .fill(urgencyColor(for: item))
-                                        .frame(width: 10, height: 10)
-
+                                    Circle().fill(urgencyColor(for: item)).frame(width: 10, height: 10)
                                     Text(item.title ?? "")
                                         .foregroundColor(.white)
                                         .lineLimit(1)
@@ -377,8 +412,7 @@ struct DashboardView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - Helpers
-
+    // MARK: Helpers
     private func urgentMaintenance(for car: Car) -> [MaintenanceItem] {
         let req: NSFetchRequest<MaintenanceItem> = MaintenanceItem.fetchRequest()
         req.predicate = NSPredicate(format: "car == %@", car)
@@ -388,7 +422,6 @@ struct DashboardView: View {
 
         let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
         let filtered = allowed.isEmpty ? items : items.filter { allowed.contains($0.title ?? "") }
-
         let unique = removeDuplicates(filtered)
 
         return unique
@@ -448,7 +481,6 @@ struct DashboardView: View {
         return Array(allRecords.filter { $0.car == car }.prefix(3))
     }
 
-    /// ✅ Optional tuple (иначе будет ошибка conditional binding)
     private func getNextService(for car: Car) -> (mileage: Int32, date: Date)? {
         guard let last = allRecords.first(where: { $0.car == car }) else { return nil }
         return (last.nextServiceKm, last.nextServiceDate ?? Date())

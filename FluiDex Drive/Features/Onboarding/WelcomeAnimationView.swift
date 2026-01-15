@@ -5,9 +5,7 @@ struct WelcomeAnimationView: View {
     @Binding var isLoggedIn: Bool
     @Binding var hasSelectedCar: Bool
 
-    // 👤 Имя пользователя — используем то же ключевое имя, что в RegisterView/LoginView
     @AppStorage("userName") private var userName: String = "Driver"
-    // ✅ если в RegisterView / LoginView используется "userName" → всё работает сразу
 
     @State private var animateCar = false
     @State private var animateText = false
@@ -15,7 +13,6 @@ struct WelcomeAnimationView: View {
 
     var body: some View {
         ZStack {
-            // 🌌 Неоновый "дышащий" фон
             LinearGradient(
                 gradient: Gradient(colors: [
                     Color.black,
@@ -32,7 +29,6 @@ struct WelcomeAnimationView: View {
             VStack(spacing: 30) {
                 Spacer()
 
-                // 💫 Текст приветствия
                 Text("Welcome back, \(userName)!")
                     .font(.system(size: 38, weight: .bold))
                     .foregroundColor(Color(hex: "#FFD54F"))
@@ -41,7 +37,6 @@ struct WelcomeAnimationView: View {
                     .scaleEffect(animateText ? 1 : 0.8)
                     .animation(.easeOut(duration: 0.8).delay(0.2), value: animateText)
 
-                // 🚗 Анимация машины
                 Image(systemName: "car.fill")
                     .resizable()
                     .scaledToFit()
@@ -52,7 +47,6 @@ struct WelcomeAnimationView: View {
                     .rotationEffect(.degrees(animateCar ? 0 : -15))
                     .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.6), value: animateCar)
 
-                // 🌈 Световой след
                 RoundedRectangle(cornerRadius: 4)
                     .fill(
                         LinearGradient(
@@ -70,17 +64,22 @@ struct WelcomeAnimationView: View {
             .opacity(fadeOut ? 0 : 1)
         }
         .onAppear {
+            // ✅ чтобы анимация корректно повторялась каждый раз
+            animateCar = false
+            animateText = false
+            fadeOut = false
+
+            // запуск
             withAnimation { animateText = true }
             withAnimation { animateCar = true }
 
-            // ⏱ Через 3 сек — мягкий переход
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 withAnimation(.easeInOut(duration: 1.0)) {
                     fadeOut = true
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     showWelcome = false
-                    isLoggedIn = true
+                    // ❌ НЕ трогаем isLoggedIn тут
                 }
             }
         }
@@ -90,7 +89,7 @@ struct WelcomeAnimationView: View {
 #Preview {
     WelcomeAnimationView(
         showWelcome: .constant(true),
-        isLoggedIn: .constant(false),
-        hasSelectedCar: .constant(false)
+        isLoggedIn: .constant(true),
+        hasSelectedCar: .constant(true)
     )
 }
