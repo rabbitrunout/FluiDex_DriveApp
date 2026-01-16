@@ -1,46 +1,41 @@
 import Foundation
 import CoreData
 
-// MARK: - Model
-
-struct MaintenancePrediction: Identifiable {
-    let id = UUID()
-    let type: String                 // "Oil", "Brakes", ...
-    let nextDate: Date
-    let nextMileage: Int32
-    let confidence: Double           // 0...1
-    let basis: String                // "history" / "fallback"
-}
-
-// MARK: - Engine
 final class AIMaintenanceEngine {
     static let shared = AIMaintenanceEngine()
     private init() {}
-
+    
     func predictNextMaintenance(for car: Car, using records: [ServiceRecord]) -> [MaintenancePrediction] {
-
+        
         let grouped = Dictionary(grouping: records, by: { normalizeType($0.type ?? "Other") })
-
+        
         let targetTypes: [String] = ["Oil", "Brakes", "Battery", "Tires", "Fluids", "Inspection"]
-
+        
         var predictions: [MaintenancePrediction] = []
-
+        
         for type in targetTypes {
             let list = (grouped[type] ?? [])
                 .compactMap { rec -> ServiceRecord? in
                     guard rec.date != nil else { return nil }
                     return rec
                 }
-                .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+                .sorted(by: { (a: ServiceRecord, b: ServiceRecord) -> Bool in
+                    (a.date ?? .distantPast) > (b.date ?? .distantPast)
+                })
 
+            
             if let p = predict(for: type, car: car, history: list) {
                 predictions.append(p)
             }
         }
-
-        predictions.sort { $0.nextDate < $1.nextDate }
+        
+        predictions.sort(by: { (a: MaintenancePrediction, b: MaintenancePrediction) -> Bool in
+            a.nextDate < b.nextDate
+        })
+        
         return predictions
-    }
+
+}
 
     // MARK: - Per-type prediction
 
@@ -62,26 +57,24 @@ final class AIMaintenanceEngine {
             let deltaKm = Swift.max(1, Int(lastMileage - prevMileage))
 
             let kmPerDay = Double(deltaKm) / Double(deltaDays)
-
             let (defaultKm, defaultDays) = defaultInterval(for: type)
 
+            // если очень мало ездят — fallback (чтобы не было странных прогнозов)
             if kmPerDay < 1 {
                 return fallbackPrediction(type: type, car: car, lastDate: lastDate, lastMileage: lastMileage)
             }
 
-            let daysToKm = Int(ceil(Double(defaultKm) / kmPerDay))
+            // если km интервал = 0 (Battery/Inspection) — опираемся на дни
+            let daysToKm = (defaultKm > 0) ? Int(ceil(Double(defaultKm) / kmPerDay)) : defaultDays
             let predictedDateByKm = Calendar.current.date(byAdding: .day, value: daysToKm, to: lastDate) ?? lastDate
-
             let predictedByDays = Calendar.current.date(byAdding: .day, value: defaultDays, to: lastDate) ?? lastDate
 
-            // ✅ вместо min(Date,Date) — наш метод
             let nextDate = earlierDate(predictedDateByKm, predictedByDays)
 
             let daysToNext = Swift.max(0, daysBetween(Date(), nextDate))
             let estMileage = Double(car.mileage) + Double(daysToNext) * kmPerDay
             let nextMileage = Int32(estMileage.rounded())
 
-            // ✅ используем Swift.min/Swift.max чтобы не конфликтовало
             let conf = Swift.min(0.95, Swift.max(0.55, Double(history.count) / 6.0))
 
             return MaintenancePrediction(
@@ -89,8 +82,13 @@ final class AIMaintenanceEngine {
                 nextDate: nextDate,
                 nextMileage: Swift.max(nextMileage, car.mileage),
                 confidence: conf,
-                basis: "history"
+                basis: "history",
+                lastDate: lastDate,
+                lastMileage: lastMileage,
+                isFallback: false   // 👈 ВОТ СЮДА
             )
+
+
         }
 
         return fallbackPrediction(type: type, car: car, lastDate: lastDate, lastMileage: lastMileage)
@@ -112,8 +110,12 @@ final class AIMaintenanceEngine {
             nextDate: nextDate,
             nextMileage: Swift.max(nextMileage, car.mileage),
             confidence: lastDate == nil ? 0.35 : 0.45,
-            basis: "fallback"
+            basis: "fallback",
+            lastDate: baseDate,
+            lastMileage: baseMileage,
+            isFallback: true
         )
+
     }
 
     private func defaultInterval(for type: String) -> (km: Int, days: Int) {
@@ -146,7 +148,6 @@ final class AIMaintenanceEngine {
         return cal.dateComponents([.day], from: d1, to: d2).day ?? 0
     }
 
-    // ✅ Переименовано! чтобы не ломать Swift.min для Double
     private func earlierDate(_ a: Date, _ b: Date) -> Date {
         (a <= b) ? a : b
     }
