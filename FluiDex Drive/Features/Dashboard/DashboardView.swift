@@ -37,17 +37,53 @@ struct DashboardView: View {
         userCars.first(where: { $0.isSelected })
     }
 
-    // MARK: - Latest service record (for active car)
-    private var latestRecordForActiveCar: ServiceRecord? {
-        guard let car = activeCar else { return nil }
-        return allRecords.first(where: { $0.car == car })
+    // MARK: - ✅ FIX: Next service must be computed from ALL records, not only latest record
+    private func recordsForCar(_ car: Car) -> [ServiceRecord] {
+        allRecords.filter { $0.car == car }
     }
 
-    // MARK: - Next due info from latest record
+    private func nextCandidates(for car: Car) -> [ServiceRecord] {
+        recordsForCar(car).filter { $0.nextServiceKm > 0 && $0.nextServiceDate != nil }
+    }
+
+    /// Picks most urgent next service among all candidate records (all types)
+    /// Priority:
+    /// 1) overdue (by km or date)
+    /// 2) earliest due date
+    /// 3) smallest km left
+    private func computeNextService(for car: Car) -> (mileage: Int32, date: Date, source: ServiceRecord)? {
+        let candidates = nextCandidates(for: car)
+        guard !candidates.isEmpty else { return nil }
+
+        let now = Date()
+
+        let best = candidates.sorted { a, b in
+            let aDate = a.nextServiceDate ?? .distantFuture
+            let bDate = b.nextServiceDate ?? .distantFuture
+
+            let aOverdue = (car.mileage >= a.nextServiceKm) || (aDate < now)
+            let bOverdue = (car.mileage >= b.nextServiceKm) || (bDate < now)
+
+            if aOverdue != bOverdue { return aOverdue && !bOverdue }
+            if aDate != bDate { return aDate < bDate }
+
+            let aKmLeft = a.nextServiceKm - car.mileage
+            let bKmLeft = b.nextServiceKm - car.mileage
+            return aKmLeft < bKmLeft
+        }.first!
+
+        return (best.nextServiceKm, best.nextServiceDate!, best)
+    }
+
+    private var nextServiceInfoForActiveCar: (mileage: Int32, date: Date, source: ServiceRecord)? {
+        guard let car = activeCar else { return nil }
+        return computeNextService(for: car)
+    }
+
+    // MARK: - Next due info (for warning logic)
     private var nextDue: (dueKm: Int32, dueDate: Date)? {
-        guard let rec = latestRecordForActiveCar else { return nil }
-        guard rec.nextServiceKm > 0, let d = rec.nextServiceDate else { return nil }
-        return (rec.nextServiceKm, d)
+        guard let next = nextServiceInfoForActiveCar else { return nil }
+        return (next.mileage, next.date)
     }
 
     // MARK: - Remaining fraction (0...1) and warning flag
@@ -56,43 +92,42 @@ struct DashboardView: View {
         guard record.nextServiceKm > 0, let nextDate = record.nextServiceDate else { return nil }
 
         // Interval baseline (from last service -> next service)
-        // mileage interval
         let intervalKm = Double(record.nextServiceKm - record.mileage)
         let remainingKm = Double(record.nextServiceKm - car.mileage)
 
-        // date interval
         let baseDate = record.date ?? Date()
-        let intervalDays = Double(max(1, Calendar.current.dateComponents([.day], from: baseDate, to: nextDate).day ?? 1))
+        let intervalDays = Double(
+            max(1, Calendar.current.dateComponents([.day], from: baseDate, to: nextDate).day ?? 1)
+        )
         let remainingDays = Double(Calendar.current.dateComponents([.day], from: Date(), to: nextDate).day ?? 9999)
 
         var candidates: [Double] = []
 
         if intervalKm > 0 {
-            let kmFrac = remainingKm / intervalKm
-            candidates.append(kmFrac)
+            candidates.append(remainingKm / intervalKm)
         }
-        // date is meaningful even if km interval is weird
-        let dayFrac = remainingDays / intervalDays
-        candidates.append(dayFrac)
 
-        // take the most urgent (smallest fraction)
+        // date is always meaningful
+        candidates.append(remainingDays / intervalDays)
+
         let raw = candidates.min() ?? 1.0
         return min(max(raw, -1.0), 2.0) // keep sane bounds
     }
 
     private var shouldShowServiceWarning: Bool {
         guard let car = activeCar,
-              let rec = latestRecordForActiveCar,
-              let due = nextDue else { return false }
+              let next = nextServiceInfoForActiveCar else { return false }
 
-        // overdue if km reached or date passed
-        let overdueByKm = car.mileage >= due.dueKm
-        let days = Calendar.current.dateComponents([.day], from: Date(), to: due.dueDate).day ?? 999
+        let dueKm = next.mileage
+        let dueDate = next.date
+
+        let overdueByKm = car.mileage >= dueKm
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: dueDate).day ?? 999
         let overdueByDate = days < 0
         if overdueByKm || overdueByDate { return true }
 
-        // <20% remaining logic
-        if let frac = remainingFractionForNextService(car: car, record: rec) {
+        // <20% remaining logic based on the chosen "most urgent" record
+        if let frac = remainingFractionForNextService(car: car, record: next.source) {
             return frac < 0.20
         }
         return false
@@ -100,24 +135,25 @@ struct DashboardView: View {
 
     private var warningBannerText: (title: String, message: String)? {
         guard let car = activeCar,
-              let rec = latestRecordForActiveCar,
-              let due = nextDue else { return nil }
+              let next = nextServiceInfoForActiveCar else { return nil }
 
-        let daysLeft = Calendar.current.dateComponents([.day], from: Date(), to: due.dueDate).day ?? 999
-        let kmLeft = Int(due.dueKm - car.mileage)
+        let dueKm = next.mileage
+        let dueDate = next.date
 
-        let overdueByKm = car.mileage >= due.dueKm
+        let daysLeft = Calendar.current.dateComponents([.day], from: Date(), to: dueDate).day ?? 999
+        let kmLeft = Int(dueKm - car.mileage)
+
+        let overdueByKm = car.mileage >= dueKm
         let overdueByDate = daysLeft < 0
 
         if overdueByKm || overdueByDate {
             return (
                 "Service overdue",
-                "Next service was due at \(Int(due.dueKm)) km / \(formatDate(due.dueDate))."
+                "Next service was due at \(Int(dueKm)) km / \(formatDate(dueDate))."
             )
         }
 
-        // <20% case
-        if let frac = remainingFractionForNextService(car: car, record: rec) {
+        if let frac = remainingFractionForNextService(car: car, record: next.source) {
             let pct = Int((max(0, min(frac, 1.0))) * 100)
             return (
                 "Service due soon",
@@ -147,7 +183,6 @@ struct DashboardView: View {
                     TripHUDView()
                         .padding(.horizontal, 20)
 
-                    // ✅🔥 IDEAL place for WarningBanner (under TripHUD, before nextService)
                     if shouldShowServiceWarning, let info = warningBannerText {
                         WarningBanner(title: info.title, message: info.message)
                     }
@@ -571,10 +606,10 @@ struct DashboardView: View {
         return Array(allRecords.filter { $0.car == car }.prefix(3))
     }
 
+    // ✅ FIX: use computed most-urgent service instead of latest record only
     private func getNextService(for car: Car) -> (mileage: Int32, date: Date)? {
-        guard let last = allRecords.first(where: { $0.car == car }) else { return nil }
-        guard last.nextServiceKm > 0, let d = last.nextServiceDate else { return nil }
-        return (last.nextServiceKm, d)
+        guard let next = computeNextService(for: car) else { return nil }
+        return (next.mileage, next.date)
     }
 }
 
