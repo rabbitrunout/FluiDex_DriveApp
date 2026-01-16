@@ -32,9 +32,17 @@ struct AIAlertsView: View {
         return allCars.first(where: { ($0.ownerEmail ?? "").lowercased() == owner && $0.isSelected })
     }
 
+    // ✅ FIX: stable filtering by objectID
     private var recordsForActiveCar: [ServiceRecord] {
         guard let car = activeCar else { return [] }
-        return allRecords.filter { $0.car == car }
+        let carID = car.objectID
+        return allRecords.filter { $0.car?.objectID == carID }
+    }
+
+    private var itemsForActiveCar: [MaintenanceItem] {
+        guard let car = activeCar else { return [] }
+        let carID = car.objectID
+        return allItems.filter { $0.car?.objectID == carID }
     }
 
     var body: some View {
@@ -66,7 +74,13 @@ struct AIAlertsView: View {
                 .padding(.bottom, 30)
             }
         }
-        .onAppear { loadAI() }
+        .onAppear { loadAI(force: true) }
+
+        // ✅ FIX: reload predictions when active car changes
+        .onChange(of: activeCar?.objectID) { _, _ in
+            loadAI(force: true)
+        }
+
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { loadAI(force: true) } label: {
@@ -120,7 +134,7 @@ struct AIAlertsView: View {
                 infoCard("No active car", "Go to car selection and choose an active car.")
                     .padding(.horizontal, 20)
             } else if recordsForActiveCar.isEmpty {
-                infoCard("No service history", "Add at least one service record so AI can learn from your data.")
+                infoCard("No service history", "Add at least one service record so predictions can use your data.")
                     .padding(.horizontal, 20)
             } else if predictions.isEmpty {
                 Text("Analyzing your car data…")
@@ -261,10 +275,11 @@ struct AIAlertsView: View {
 
         isLoadingAI = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            // ✅ can pass ALL records too, engine will filter, but we already filtered here
             predictions = AIMaintenanceEngine.shared.predictNextMaintenance(for: car, using: carRecords)
             isLoadingAI = false
-        })
+        }
     }
 
     // MARK: - Alerts logic
@@ -272,7 +287,8 @@ struct AIAlertsView: View {
     private func allAlertsForActiveCar() -> [MaintenanceItem] {
         guard let car = activeCar else { return [] }
 
-        let carItems = allItems.filter { $0.car == car }
+        // ✅ FIX: use itemsForActiveCar (objectID filtered)
+        let carItems = itemsForActiveCar
 
         let allowed = MaintenanceRules.allowedTasks(for: car.fuelType ?? "")
         let filtered = allowed.isEmpty ? carItems : carItems.filter { allowed.contains($0.title ?? "") }

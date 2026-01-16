@@ -4,38 +4,36 @@ import CoreData
 final class AIMaintenanceEngine {
     static let shared = AIMaintenanceEngine()
     private init() {}
-    
+
+    /// Predicts next maintenance ONLY for the given car.
+    /// Important: `records` may contain records for many cars — we filter by car.objectID here.
     func predictNextMaintenance(for car: Car, using records: [ServiceRecord]) -> [MaintenancePrediction] {
-        
-        let grouped = Dictionary(grouping: records, by: { normalizeType($0.type ?? "Other") })
-        
+
+        // ✅ FIX: strict filtering by car (objectID is reliable across contexts)
+        let carID = car.objectID
+        let carRecords = records.filter { $0.car?.objectID == carID }
+
+        let grouped = Dictionary(grouping: carRecords, by: { normalizeType($0.type ?? "Other") })
+
         let targetTypes: [String] = ["Oil", "Brakes", "Battery", "Tires", "Fluids", "Inspection"]
-        
+
         var predictions: [MaintenancePrediction] = []
-        
+
         for type in targetTypes {
             let list = (grouped[type] ?? [])
-                .compactMap { rec -> ServiceRecord? in
-                    guard rec.date != nil else { return nil }
-                    return rec
-                }
-                .sorted(by: { (a: ServiceRecord, b: ServiceRecord) -> Bool in
+                .filter { $0.date != nil }
+                .sorted { (a: ServiceRecord, b: ServiceRecord) -> Bool in
                     (a.date ?? .distantPast) > (b.date ?? .distantPast)
-                })
+                }
 
-            
             if let p = predict(for: type, car: car, history: list) {
                 predictions.append(p)
             }
         }
-        
-        predictions.sort(by: { (a: MaintenancePrediction, b: MaintenancePrediction) -> Bool in
-            a.nextDate < b.nextDate
-        })
-        
-        return predictions
 
-}
+        predictions.sort { $0.nextDate < $1.nextDate }
+        return predictions
+    }
 
     // MARK: - Per-type prediction
 
@@ -59,12 +57,12 @@ final class AIMaintenanceEngine {
             let kmPerDay = Double(deltaKm) / Double(deltaDays)
             let (defaultKm, defaultDays) = defaultInterval(for: type)
 
-            // если очень мало ездят — fallback (чтобы не было странных прогнозов)
+            // If driving is extremely low, fallback to default intervals
             if kmPerDay < 1 {
                 return fallbackPrediction(type: type, car: car, lastDate: lastDate, lastMileage: lastMileage)
             }
 
-            // если km интервал = 0 (Battery/Inspection) — опираемся на дни
+            // If defaultKm == 0 (Battery/Inspection) rely on days
             let daysToKm = (defaultKm > 0) ? Int(ceil(Double(defaultKm) / kmPerDay)) : defaultDays
             let predictedDateByKm = Calendar.current.date(byAdding: .day, value: daysToKm, to: lastDate) ?? lastDate
             let predictedByDays = Calendar.current.date(byAdding: .day, value: defaultDays, to: lastDate) ?? lastDate
@@ -85,10 +83,8 @@ final class AIMaintenanceEngine {
                 basis: "history",
                 lastDate: lastDate,
                 lastMileage: lastMileage,
-                isFallback: false   // 👈 ВОТ СЮДА
+                isFallback: false
             )
-
-
         }
 
         return fallbackPrediction(type: type, car: car, lastDate: lastDate, lastMileage: lastMileage)
@@ -115,7 +111,6 @@ final class AIMaintenanceEngine {
             lastMileage: baseMileage,
             isFallback: true
         )
-
     }
 
     private func defaultInterval(for type: String) -> (km: Int, days: Int) {
