@@ -287,23 +287,14 @@ struct AddServiceView: View {
         return try? viewContext.fetch(req).first
     }
 
-    /// ✅ Preferred car: exact `carObjectID` (from ServiceHistoryView) -> fallback to "selected car for owner"
-    private func fetchActiveCarPreferred() -> Car? {
-        if let id = carObjectID,
-           let car = try? viewContext.existingObject(with: id) as? Car {
-            return car
+    /// ✅ STRICT: always save to the exact car passed from ServiceHistoryView.
+    /// If carObjectID is missing -> do NOT guess (prevents mixing cars).
+    private func fetchCarForSaving() -> Car? {
+        guard let id = carObjectID,
+              let car = try? viewContext.existingObject(with: id) as? Car else {
+            return nil
         }
-        return fetchActiveCarForOwner()
-    }
-
-    private func fetchActiveCarForOwner() -> Car? {
-        let owner = currentUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !owner.isEmpty else { return nil }
-
-        let req: NSFetchRequest<Car> = Car.fetchRequest()
-        req.fetchLimit = 1
-        req.predicate = NSPredicate(format: "isSelected == true AND ownerEmail == %@", owner)
-        return try? viewContext.fetch(req).first
+        return car
     }
 
     // MARK: - Maintenance lookup helpers
@@ -362,10 +353,10 @@ struct AddServiceView: View {
     }
 
     private func refreshNextDuePreview() {
-        guard let activeCar = fetchActiveCarPreferred() else {
+        guard let activeCar = fetchCarForSaving() else {
             nextDueKmPreview = 0
             nextDueDatePreview = nil
-            previewInfoText = "Select a car to calculate next due."
+            previewInfoText = "Open Service History for a specific car to add records."
             return
         }
 
@@ -394,8 +385,9 @@ struct AddServiceView: View {
 
         let enteredMileage = Int32(mileage) ?? 0
 
-        guard let activeCar = fetchActiveCarPreferred() else {
-            errorMessage = "No active car for this account. Please select a car first."
+        // ✅ STRICT car binding
+        guard let activeCar = fetchCarForSaving() else {
+            errorMessage = "No car selected. Open Service History for a car and try again."
             return
         }
 
@@ -420,10 +412,11 @@ struct AddServiceView: View {
         newRecord.nextServiceKm = nextDueKmPreview > 0 ? nextDueKmPreview : (enteredMileage + 10000)
         newRecord.nextServiceDate = nextDueDatePreview ?? Calendar.current.date(byAdding: .day, value: 180, to: date)
 
-        // ✅ CRITICAL: bind to the exact car instance we want
+        // ✅ bind to car (NOT guessed)
         newRecord.car = activeCar
         newRecord.user = currentUser
 
+        // ✅ if from schedule -> update that MaintenanceItem
         if let id = maintenanceItemID,
            let item = try? viewContext.existingObject(with: id) as? MaintenanceItem {
 

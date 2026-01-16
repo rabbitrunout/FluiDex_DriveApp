@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import Foundation
 
 struct CarModel: Identifiable {
     let id = UUID()
@@ -36,7 +37,10 @@ struct CarSelectionView: View {
                     .padding(.top, 30)
 
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 20)], spacing: 20) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 150), spacing: 20)],
+                        spacing: 20
+                    ) {
                         ForEach(cars) { car in
                             Button { selectCar(car) } label: {
                                 CarCardView(car: car, selectedCarName: selectedCar)
@@ -69,50 +73,67 @@ struct CarSelectionView: View {
     }
 
     private func selectCar(_ model: CarModel) {
-        let owner = userEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let owner = userEmail
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
         guard !owner.isEmpty else {
             print("❌ userEmail empty — cannot assign car to owner")
             return
         }
 
-        // 1) снимаем active у всех машин ТЕКУЩЕГО пользователя
-        let fetchAll: NSFetchRequest<Car> = Car.fetchRequest()
-        fetchAll.predicate = NSPredicate(format: "ownerEmail == %@", owner)
-        let userCars = (try? viewContext.fetch(fetchAll)) ?? []
-        for c in userCars { c.isSelected = false }
+        // ✅ важно: всё в main context
+        viewContext.performAndWait {
 
-        // 2) если такая машина уже есть у пользователя — используем её (не создаём дубль)
-        let fetchExisting: NSFetchRequest<Car> = Car.fetchRequest()
-        fetchExisting.fetchLimit = 1
-        fetchExisting.predicate = NSPredicate(format: "ownerEmail == %@ AND name == %@", owner, model.name)
-        let existing = (try? viewContext.fetch(fetchExisting))?.first
+            // 1) снять isSelected у всех машин текущего пользователя
+            let fetchAll: NSFetchRequest<Car> = Car.fetchRequest()
+            fetchAll.predicate = NSPredicate(format: "ownerEmail == %@", owner)
+            let userCars = (try? viewContext.fetch(fetchAll)) ?? []
+            userCars.forEach { $0.isSelected = false }
 
-        let carEntity: Car
-        if let existing {
-            carEntity = existing
-        } else {
-            let newCar = Car(context: viewContext)
-            newCar.id = UUID()
-            newCar.name = model.name
-            newCar.imageName = model.imageName
-            newCar.ownerEmail = owner
-            carEntity = newCar
-        }
+            // 2) найти существующую машину, иначе создать
+            let fetchExisting: NSFetchRequest<Car> = Car.fetchRequest()
+            fetchExisting.fetchLimit = 1
+            fetchExisting.predicate = NSPredicate(format: "ownerEmail == %@ AND name == %@", owner, model.name)
+            let existing = (try? viewContext.fetch(fetchExisting))?.first
 
-        carEntity.isSelected = true
+            let carEntity: Car
+            if let existing {
+                carEntity = existing
+            } else {
+                let newCar = Car(context: viewContext)
+                newCar.id = UUID()
+                newCar.name = model.name
+                newCar.imageName = model.imageName
+                newCar.ownerEmail = owner
+                carEntity = newCar
+            }
 
-        do {
-            try viewContext.save()
+            carEntity.isSelected = true
 
-            selectedCar = carEntity.name ?? model.name
-            selectedCarID = carEntity.id?.uuidString ?? ""
-            selectedCarEntity = carEntity
+            do {
+                try viewContext.save()
 
-            hasSelectedCar = true
-            showSetup = true
+                // ✅ AppStorage только для подписей/лейблов
+                selectedCar = carEntity.name ?? model.name
+                selectedCarID = carEntity.id?.uuidString ?? ""
 
-        } catch {
-            print("❌ Error saving:", error)
+                selectedCarEntity = carEntity
+                hasSelectedCar = true
+
+                // ✅ форс обновления объектов
+                viewContext.refreshAllObjects()
+
+                // ✅ уведомляем ВСЕ экраны
+                Foundation.NotificationCenter.default.post(
+                    name: Foundation.Notification.Name.activeCarChanged,
+                    object: nil
+                )
+
+                showSetup = true
+            } catch {
+                print("❌ Error saving:", error)
+            }
         }
     }
 }

@@ -10,7 +10,6 @@ struct ServiceHistoryView: View {
     @State private var selectedCategory: String = "All"
     @State private var showAddService = false
 
-    // edit/delete states
     @State private var recordToEdit: ServiceRecord? = nil
     @State private var recordToDelete: ServiceRecord? = nil
     @State private var showDeleteAlert = false
@@ -18,12 +17,8 @@ struct ServiceHistoryView: View {
     @State private var errorMessage: String = ""
     @State private var toast: String = ""
 
-    // ✅ Share (CSV/PDF)
-    private struct ShareItem: Identifiable {
-        let id = UUID()
-        let url: URL
-    }
-    @State private var shareItem: ShareItem? = nil
+    // ✅ заставляем SwiftUI обновляться при смене active car
+    @State private var refreshToken = UUID()
 
     // ✅ all records
     @FetchRequest(
@@ -31,65 +26,30 @@ struct ServiceHistoryView: View {
         animation: .easeInOut
     ) private var allRecords: FetchedResults<ServiceRecord>
 
-    // ✅ active car for current owner
-    @FetchRequest(
-        sortDescriptors: [],
-        predicate: NSPredicate(
-            format: "isSelected == true AND ownerEmail == %@",
-            (UserDefaults.standard.string(forKey: "userEmail") ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased()
-        )
-    ) private var selectedCar: FetchedResults<Car>
+    // ✅ ВСЕ машины пользователя (не только selected)
+    @FetchRequest private var userCars: FetchedResults<Car>
 
-    private var activeCar: Car? { selectedCar.first }
+    init() {
+        let email = (UserDefaults.standard.string(forKey: "userEmail") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
 
-    // MARK: - Matching helpers
-
-    private func norm(_ s: String?) -> String {
-        (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    private func carSignature(owner: String, name: String, year: String) -> String {
-        "\(norm(owner))|\(norm(name))|\(norm(year))"
-    }
-
-    private func signature(of car: Car?) -> String {
-        carSignature(
-            owner: car?.ownerEmail ?? "",
-            name: car?.name ?? "",
-            year: car?.year ?? "" // ✅ year is String
+        _userCars = FetchRequest<Car>(
+            sortDescriptors: [NSSortDescriptor(keyPath: \Car.name, ascending: true)],
+            predicate: NSPredicate(format: "ownerEmail == %@", email),
+            animation: .easeInOut
         )
     }
 
-    // ✅ 1) match duplicate cars by signature (owner+name+year)
-    private var recordsBySignature: [ServiceRecord] {
+    private var activeCar: Car? {
+        userCars.first(where: { $0.isSelected })
+    }
+
+    // ✅ только записи этой машины (строго по objectID)
+    private var recordsForActiveCar: [ServiceRecord] {
         guard let car = activeCar else { return [] }
-        let sig = signature(of: car)
-        return allRecords.filter { rec in
-            guard let recCar = rec.car else { return false }
-            return signature(of: recCar) == sig
-        }
-    }
-
-    // ✅ 2) orphan records (car == nil)
-    private var orphanRecords: [ServiceRecord] {
-        allRecords.filter { $0.car == nil }
-    }
-
-    // ✅ union unique (signature + orphan)
-    private var unionRecords: [ServiceRecord] {
-        var seen = Set<String>()
-        var out: [ServiceRecord] = []
-        let combined = recordsBySignature + orphanRecords
-        for r in combined {
-            let key = r.objectID.uriRepresentation().absoluteString
-            if !seen.contains(key) {
-                seen.insert(key)
-                out.append(r)
-            }
-        }
-        return out
+        let carID = car.objectID
+        return allRecords.filter { $0.car?.objectID == carID }
     }
 
     let categories = ["All", "Oil", "Tires", "Fluids", "Battery", "Brakes", "Inspection", "Other"]
@@ -113,6 +73,10 @@ struct ServiceHistoryView: View {
 
                 if let car = activeCar {
                     Text("\(car.name ?? "") • \(car.year ?? "") • \(Int(car.mileage)) km")
+                        .font(.footnote)
+                        .foregroundColor(.white.opacity(0.65))
+                } else {
+                    Text("No active car selected")
                         .font(.footnote)
                         .foregroundColor(.white.opacity(0.65))
                 }
@@ -159,7 +123,7 @@ struct ServiceHistoryView: View {
                                 .foregroundColor(.white.opacity(0.6))
                                 .padding(.top, 50)
                         } else {
-                            ForEach(filteredRecords()) { rec in
+                            ForEach(filteredRecords(), id: \.objectID) { rec in
                                 recordCard(rec)
                                     .contentShape(Rectangle())
                                     .onTapGesture { recordToEdit = rec }
@@ -187,43 +151,19 @@ struct ServiceHistoryView: View {
                 }
 
                 // buttons row
-                HStack(spacing: 12) {
-                    Button {
-                        showAddService = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                            Text("Add Service")
-                        }
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(hex: "#FFD54F"))
-                        .cornerRadius(22)
+                Button {
+                    showAddService = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Service")
                     }
-
-                    // ✅ Repair only if there are orphans
-                    if activeCar != nil && orphanRecords.count > 0 {
-                        Button {
-                            repairHistoryToActiveCar()
-                        } label: {
-                            HStack {
-                                Image(systemName: "wand.and.stars")
-                                Text("Repair")
-                            }
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 120)
-                            .padding()
-                            .background(Color.white.opacity(0.12))
-                            .cornerRadius(22)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22)
-                                    .stroke(Color.cyan.opacity(0.25), lineWidth: 1)
-                            )
-                        }
-                    }
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(hex: "#FFD54F"))
+                    .cornerRadius(22)
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 14)
@@ -236,33 +176,18 @@ struct ServiceHistoryView: View {
                 }
             }
         }
+        .id(refreshToken) // ✅ форсим перерисовку при смене машины
+
         .onAppear { withAnimation { tabBar.isVisible = false } }
         .onDisappear { withAnimation { tabBar.isVisible = true } }
 
-        // ✅ Toolbar export menu (CSV/PDF) — как в старой версии
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        exportCSV()
-                    } label: {
-                        Label("Export CSV", systemImage: "doc.text")
-                    }
-
-                    Button {
-                        exportPDF_A4()
-                    } label: {
-                        Label("Export PDF (A4)", systemImage: "doc.richtext")
-                    }
-
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundColor(Color(hex: "#FFD54F"))
-                }
-            }
+        // ✅ слушаем смену активной машины
+        .onReceive(NotificationCenter.default.publisher(for: .activeCarChanged)) { _ in
+            viewContext.refreshAllObjects()
+            refreshToken = UUID()
         }
 
-        // ✅ Add sheet
+        // Add sheet
         .sheet(isPresented: $showAddService) {
             AddServiceView(
                 prefilledType: nil,
@@ -277,7 +202,7 @@ struct ServiceHistoryView: View {
             .environmentObject(TabBarVisibility())
         }
 
-        // ✅ Edit sheet
+        // Edit sheet
         .sheet(item: $recordToEdit) { rec in
             EditServiceView(record: rec)
                 .presentationDetents([.medium, .large])
@@ -285,12 +210,7 @@ struct ServiceHistoryView: View {
                 .environment(\.managedObjectContext, viewContext)
         }
 
-        // ✅ Share sheet for CSV/PDF
-        .sheet(item: $shareItem) { item in
-            ShareSheet(items: [item.url])
-        }
-
-        // ✅ Delete alert
+        // Delete confirm
         .alert("Delete this service?", isPresented: $showDeleteAlert) {
             Button("Cancel", role: .cancel) { recordToDelete = nil }
             Button("Delete", role: .destructive) {
@@ -340,7 +260,7 @@ struct ServiceHistoryView: View {
     // MARK: - Filtering
 
     private func filteredRecords() -> [ServiceRecord] {
-        let base = unionRecords
+        let base = recordsForActiveCar
         return selectedCategory == "All" ? base : base.filter { $0.type == selectedCategory }
     }
 
@@ -349,44 +269,6 @@ struct ServiceHistoryView: View {
         let f = DateFormatter()
         f.dateStyle = .medium
         return f.string(from: date)
-    }
-
-    // MARK: - Export
-
-    private func exportCSV() {
-        errorMessage = ""
-        guard let car = activeCar else { errorMessage = "No active car selected."; return }
-        let records = filteredRecords() // ✅ respects category filter
-        guard !records.isEmpty else { errorMessage = "No records to export."; return }
-
-        let safeName = (car.name ?? "Car").replacingOccurrences(of: " ", with: "_")
-        let fileName = "FluiDex_ServiceHistory_\(safeName).csv"
-
-        let csv = ServiceExportManager.shared.makeCSV(car: car, records: records)
-        do {
-            let url = try ServiceExportManager.shared.writeCSVToTempFile(fileName: fileName, csv: csv)
-            shareItem = ShareItem(url: url)
-        } catch {
-            errorMessage = "CSV export failed: \(error.localizedDescription)"
-        }
-    }
-
-    private func exportPDF_A4() {
-        errorMessage = ""
-        guard let car = activeCar else { errorMessage = "No active car selected."; return }
-        let records = filteredRecords() // ✅ respects category filter
-        guard !records.isEmpty else { errorMessage = "No records to export."; return }
-
-        let safeName = (car.name ?? "Car").replacingOccurrences(of: " ", with: "_")
-        let fileName = "FluiDex_ServiceHistory_\(safeName)_A4.pdf"
-
-        let data = ServiceExportManager.shared.makePDFDataA4(car: car, records: records)
-        do {
-            let url = try ServiceExportManager.shared.writePDFToTempFile(fileName: fileName, data: data)
-            shareItem = ShareItem(url: url)
-        } catch {
-            errorMessage = "PDF export failed: \(error.localizedDescription)"
-        }
     }
 
     // MARK: - Delete
@@ -399,25 +281,6 @@ struct ServiceHistoryView: View {
             toast = "🗑 Deleted."
         } catch {
             errorMessage = "Delete failed: \(error.localizedDescription)"
-        }
-    }
-
-    // MARK: - Repair
-
-    private func repairHistoryToActiveCar() {
-        errorMessage = ""
-        guard let targetCar = activeCar else { return }
-
-        let toFix = orphanRecords
-        guard !toFix.isEmpty else { return }
-
-        toFix.forEach { $0.car = targetCar }
-
-        do {
-            try viewContext.save()
-            toast = "✅ Repaired \(toFix.count) record(s)."
-        } catch {
-            errorMessage = "Repair failed: \(error.localizedDescription)"
         }
     }
 }

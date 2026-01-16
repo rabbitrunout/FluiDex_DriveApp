@@ -15,7 +15,7 @@
         <relationship name="fluids" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="Fluid" inverseName="car" inverseEntity="Fluid"/>
         <relationship name="maintenanceItems" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="MaintenanceItem" inverseName="car" inverseEntity="MaintenanceItem"/>
         <relationship name="owner" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="cars" inverseEntity="User"/>
-        <relationship name="records" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="ServiceRecord" inverseName="car" inverseEntity="ServiceRecord"/>
+        <relationship name="records" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ServiceRecord" inverseName="car" inverseEntity="ServiceRecord"/>
         <relationship name="rules" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="ServiceRule" inverseName="car" inverseEntity="ServiceRule"/>
         <relationship name="trips" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Trip" inverseName="car" inverseEntity="Trip"/>
     </entity>
