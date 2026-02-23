@@ -4,7 +4,7 @@
 
 Smart vehicle maintenance & trip tracking app for iOS  
 
-Built with SwiftUI, Core Data, and scalable modular architecture.
+Built with **SwiftUI**, **Core Data**, and scalable modular architecture.
 
 ![Platform](https://img.shields.io/badge/platform-iOS-lightgrey)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
@@ -20,14 +20,14 @@ Built with SwiftUI, Core Data, and scalable modular architecture.
 
 FluiDex Drive is a SwiftUI-based iOS application designed to manage vehicle maintenance, service history, and driving activity.
 
-The app demonstrates:
+The project demonstrates:
 
-- Feature-first architecture
-- MVVM separation
+- Feature-first modular architecture
+- MVVM separation of concerns
 - Structured Core Data modeling
-- Multi-entity relationships
-- Scalable module organization
-- Business-logic separation via Managers layer
+- Multi-entity relationship handling
+- Business logic isolation via Managers layer
+- Scalability planning for hardware integration (OBD-II)
 
 ---
 
@@ -35,12 +35,22 @@ The app demonstrates:
 
 - Designed a normalized Core Data schema with multiple entity relationships
 - Implemented one-to-many and many-to-one data flows
-- Built feature-first modular architecture for scalability
+- Built feature-first modular architecture for independent scaling
 - Separated UI, business logic, and persistence layers
-- Implemented local notifications (time & mileage-based)
-- Integrated partial Firebase Auth & sync
-- Structured Bluetooth / OBD module for future hardware integration
+- Implemented local notifications (time-based & mileage-based)
+- Integrated partial Firebase authentication & sync layer
+- Structured Bluetooth / OBD module for future hardware expansion
 - Created reusable SwiftUI components and animated overlays
+
+---
+
+## ⚙️ Technical Decisions
+
+- **Core Data over Realm** for deep Apple ecosystem integration
+- **Feature-first structure** to allow isolated feature expansion
+- Introduced a **Managers layer** to prevent ViewModel overloading
+- Abstracted notification scheduling for per-car maintenance logic
+- Structured entities to support future cloud sync & analytics
 
 ---
 
@@ -48,24 +58,26 @@ The app demonstrates:
 
 Feature-first modular structure:
 
+```
 FluiDex_Drive/
 ├── App/
 ├── Features/
-│ ├── Authentication/
-│ ├── Dashboard/
-│ ├── Maintenance/
-│ ├── TripTracking/
-│ ├── CarSetup/
-│ ├── Notifications/
-│ ├── Bluetooth/
-│ └── Profile/
+│   ├── Authentication/
+│   ├── Dashboard/
+│   ├── Maintenance/
+│   ├── TripTracking/
+│   ├── CarSetup/
+│   ├── Notifications/
+│   ├── Bluetooth/
+│   └── Profile/
 ├── Models/
 ├── Managers/
 ├── UIComponents/
 ├── Assets/
-
+```
 
 Architecture style:
+
 - SwiftUI + MVVM
 - Core Data persistence layer
 - Business logic isolated in Managers
@@ -100,30 +112,41 @@ Data integrity and cascading logic handled within persistence layer.
 
 ## 📱 Core Functionalities
 
-### Vehicle Management
+### 🚗 Vehicle Management
 - Multiple cars per user
 - Active car selection
 - Mileage tracking
 
-### Maintenance Tracking
-- Service history timeline
-- Cost tracking
-- Receipt image storage
+### 🛠 Maintenance Tracking
+- Structured service history timeline
+- Cost tracking & receipt image storage
 - Rule-based next service calculation
+- Per-car maintenance logic
 
-### Trip Tracking
+### 📍 Trip Tracking
 - Manual trip logging
 - Distance-based maintenance estimation
 
-### Smart Reminders
-- Local notifications
+### 🔔 Smart Reminders
+- Local push notifications
 - Time-based reminders
 - Mileage-based reminders
 
-### Connectivity (WIP)
-- Bluetooth module
-- OBD-II preview
+### 🔌 Connectivity (Work in Progress)
+- Bluetooth connection module
+- OBD-II preview screen
 - Future live diagnostics integration
+
+---
+
+## 🧠 Key Learnings
+
+- Designing scalable Core Data schemas
+- Managing complex entity relationships
+- Structuring large SwiftUI projects
+- Separating UI from business logic
+- Planning for hardware-level integrations
+- Thinking in scalable feature modules
 
 ---
 
@@ -134,7 +157,7 @@ Data integrity and cascading logic handled within persistence layer.
 - Core Data
 - Firebase (Auth / partial sync)
 - Local Notifications
-- Bluetooth (CoreBluetooth – experimental)
+- CoreBluetooth (experimental)
 - Custom UI components & animations
 
 ---
@@ -146,7 +169,7 @@ Data integrity and cascading logic handled within persistence layer.
 - Real OBD-II adapter integration
 - Dark mode support
 - Unit testing layer
-- Data export (PDF/CSV)
+- Data export (PDF / CSV)
 
 ---
 
@@ -161,4 +184,4 @@ Data integrity and cascading logic handled within persistence layer.
 ## 👩‍💻 Author
 
 Irina Safronova  
-iOS & Frontend Developer
+iOS Developer focused on SwiftUI & scalable mobile architecture  
