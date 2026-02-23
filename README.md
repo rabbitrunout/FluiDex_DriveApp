@@ -154,7 +154,7 @@ Data integrity and cascading logic handled within persistence layer.
 
 | Dashboard | Service Log | Trip Tracking | Car Setup |
 |----------|-------------|---------------|-----------|
-| ![](Docs/dashboard.png) | ![](Docs/service-log.png) | ![](Docs/trip.png) | ![](Docs/car-setup.png) |
+| ![](2.png) | ![](11.png) | ![](6.png) | ![](3.png) |
 
 ---
 
