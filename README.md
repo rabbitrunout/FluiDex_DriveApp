@@ -2,229 +2,163 @@
 
 # 🚗 FluiDex Drive  
 
-**Smart vehicle maintenance & trip tracking app**
+Smart vehicle maintenance & trip tracking app for iOS  
 
-Keep your car healthy, your service history organized, and your next maintenance under control.
-
----
+Built with SwiftUI, Core Data, and scalable modular architecture.
 
 ![Platform](https://img.shields.io/badge/platform-iOS-lightgrey)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-blueviolet)
 ![CoreData](https://img.shields.io/badge/Persistence-Core%20Data-9cf)
 ![Firebase](https://img.shields.io/badge/Backend-Firebase-orange)
-![Status](https://img.shields.io/badge/status-Active%20Development-success)
 
 </div>
 
 ---
 
-## 🎯 What is FluiDex Drive?
+## 🚀 Overview
 
-**FluiDex Drive** is an iOS app built with SwiftUI that works like a digital health journal for your car.
+FluiDex Drive is a SwiftUI-based iOS application designed to manage vehicle maintenance, service history, and driving activity.
 
-The app helps beginner and busy drivers:
+The app demonstrates:
 
-- remember **when to change oil, fluids, filters, tires**
-- keep a **clean service history** with costs and mileage
-- track **trips and distance** for smarter maintenance
-- get **smart reminders** by time or odometer
-- manage **multiple cars and users** in one place
-
-> Designed and developed as a portfolio / capstone project by **Irina S.**
-
----
-
-## 🌟 Core Features
-
-### 👤 1. User & Profiles
-
-- Email-based **sign up / login**
-- Personal profile per user
-- Each user can own **multiple cars**
+- Feature-first architecture
+- MVVM separation
+- Structured Core Data modeling
+- Multi-entity relationships
+- Scalable module organization
+- Business-logic separation via Managers layer
 
 ---
 
-### 🚗 2. Car Garage
+## 🧠 Engineering Highlights
 
-Manage all your cars in one place:
-
-- Brand, model, year, VIN, fuel type
-- Current mileage
-- Car images
-- Mark **active / selected car** for the dashboard
-
----
-
-### 🛠 3. Smart Maintenance & Service Log
-
-Turn random receipts into a clean service history:
-
-- Create **service records** with:
-  - date & mileage  
-  - service type (oil, tires, brakes, etc.)  
-  - parts & labor cost, total cost  
-  - next service date / mileage  
-  - receipt photo  
-- See a **timeline of all services per car**  
-- Rule-based + AI-style engine to suggest what to service next  
+- Designed a normalized Core Data schema with multiple entity relationships
+- Implemented one-to-many and many-to-one data flows
+- Built feature-first modular architecture for scalability
+- Separated UI, business logic, and persistence layers
+- Implemented local notifications (time & mileage-based)
+- Integrated partial Firebase Auth & sync
+- Structured Bluetooth / OBD module for future hardware integration
+- Created reusable SwiftUI components and animated overlays
 
 ---
 
-### 📍 4. Trip Tracking
+## 🏗 Architecture
 
-Understand how you actually drive:
+Feature-first modular structure:
 
-- Log trips (date + distance)
-- Use trip data to:
-  - estimate when next service is due  
-  - track usage per car  
-- Dedicated **TripTracking** and **TripHUD** screens
-
----
-
-### 🔔 5. Smart Reminders
-
-Never miss important maintenance:
-
-- Local push notifications  
-- Time-based and mileage-based reminders  
-- Per-car scheduling logic  
-
----
-
-### 🔌 6. Connectivity (Work in Progress)
-
-- **Bluetooth** connection screen  
-- **OBD-II live data** preview screen  
-- Future integration with real OBD adapters
-
----
-
-### 🧩 7. UI & Experience
-
-- Fully **SwiftUI-based** interface  
-- Welcome & onboarding flow  
-- Custom components:
-  - cards  
-  - banners  
-  - progress indicators  
-  - animated overlays  
-- Sound feedback via `SoundManager`
-
----
-
-## 🧱 8.  Architecture Overview
-
-The project uses a **feature-first modular architecture**, designed to scale:
-
-```text
 FluiDex_Drive/
 ├── App/
 ├── Features/
-│   ├── Authentication/
-│   ├── CarSetup/
-│   ├── Dashboard/
-│   ├── Maintenance/
-│   ├── TripTracking/
-│   ├── Profile/
-│   ├── Notifications/
-│   ├── Onboarding/
-│   └── Bluetooth/
-├── Managers/
+│ ├── Authentication/
+│ ├── Dashboard/
+│ ├── Maintenance/
+│ ├── TripTracking/
+│ ├── CarSetup/
+│ ├── Notifications/
+│ ├── Bluetooth/
+│ └── Profile/
 ├── Models/
+├── Managers/
 ├── UIComponents/
-├── Sounds/
-├── FluiDex_Drive/
-└── Assets/
-```
+├── Assets/
 
 
 Architecture style:
-- **SwiftUI + ViewModel**
-- **Core Data** for local persistence  
-- **Managers layer** for business logic  
-- Partial **Firebase Sync** layer  
+- SwiftUI + MVVM
+- Core Data persistence layer
+- Business logic isolated in Managers
+- Modular feature grouping
+- Firebase integration layer (partial)
 
 ---
 
 ## 🗄 Core Data Model
 
-### User
-| Attributes | Relationships |
-|-----------|---------------|
-| id, name, email, password, createdAt | cars (to-many), services (to-many) |
+### Entities
 
-### Car
-| Attributes | Relationships |
-|-----------|---------------|
-| id, name, brand, model, year, vin, fuelType, mileage, isSelected | owner (to-one), records, trips, fluids, items, rules |
+- **User**
+- **Car**
+- **ServiceRecord**
+- **Trip**
+- **Fluid**
+- **MaintenanceItem**
+- **ServiceRule**
 
-### ServiceRecord
-| Attributes | Relationships |
-|-----------|---------------|
-| id, date, mileage, type, costs, nextServiceDate/Km, receiptImageData | car (to-one), user (to-one) |
+### Relationships
 
-### Trip
-| Attributes | Relationships |
-|-----------|---------------|
-| id, date, distance | car (to-one) |
+- User → Cars (1-to-many)
+- Car → ServiceRecords (1-to-many)
+- Car → Trips (1-to-many)
+- ServiceRecord → Car (many-to-one)
+- Trip → Car (many-to-one)
 
-### Additional  
-Fluid, MaintenanceItem, ServiceRule
-
+Data integrity and cascading logic handled within persistence layer.
 
 ---
 
-## 🛠 10. Tech Stack
+## 📱 Core Functionalities
 
-- **Swift**, **SwiftUI**  
-- **MVVM / feature-first architecture**  
-- **Core Data**  
-- **Firebase** (Auth/Sync — partial)  
-- **Bluetooth / OBD (work in progress)**  
-- **Local Notifications**  
-- Custom animations & UI components  
+### Vehicle Management
+- Multiple cars per user
+- Active car selection
+- Mileage tracking
+
+### Maintenance Tracking
+- Service history timeline
+- Cost tracking
+- Receipt image storage
+- Rule-based next service calculation
+
+### Trip Tracking
+- Manual trip logging
+- Distance-based maintenance estimation
+
+### Smart Reminders
+- Local notifications
+- Time-based reminders
+- Mileage-based reminders
+
+### Connectivity (WIP)
+- Bluetooth module
+- OBD-II preview
+- Future live diagnostics integration
 
 ---
 
-## 🚀 Getting Started
+## 🛠 Tech Stack
 
-1. Clone the repository  
-2. Open the project in Xcode  
-3. (Optional) add your `GoogleService-Info.plist` for Firebase  
-4. Run the app on a simulator or device  
+- Swift
+- SwiftUI
+- Core Data
+- Firebase (Auth / partial sync)
+- Local Notifications
+- Bluetooth (CoreBluetooth – experimental)
+- Custom UI components & animations
 
 ---
 
-## 🗺 Roadmap
+## 🔜 Roadmap
 
-- Full Firebase sync  
-- Real OBD-II adapter support  
-- Advanced trip analytics  
-- Theme engine / dark mode  
-- PDF/CSV export  
-- Improved AI maintenance engine  
+- Full Firebase real-time sync
+- Advanced analytics dashboard
+- Real OBD-II adapter integration
+- Dark mode support
+- Unit testing layer
+- Data export (PDF/CSV)
 
 ---
 
 ## 📸 Screenshots
 
-Coming soon – UI is under active development.
-
 | Dashboard | Service Log | Trip Tracking | Car Setup |
 |----------|-------------|---------------|-----------|
 | ![](Docs/dashboard.png) | ![](Docs/service-log.png) | ![](Docs/trip.png) | ![](Docs/car-setup.png) |
 
+---
 
- 🤝 Contributing
+## 👩‍💻 Author
 
-This is a portfolio / learning project.
-Suggestions, ideas, or code reviews are always welcome via GitHub issues or pull requests.
-
-## 👩‍💻 Author  
-**Irina Safronova**  
-Junior Mobile & Web Developer  
-Swift • SwiftUI • Firebase • Core Data 
-
-Feel free to explore the code, open issues, or reach out with feedback.
+Irina Safronova  
+iOS & Frontend Developer
